@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SHAPES</title>
+<link rel="stylesheet" href="SHAPES_V1.css" />
+</head>
+<body>
+
+<div id="wrap"><canvas id="c"></canvas></div>
+<div class="wave-banner" id="waveBanner"></div>
+
+<div id="menu">
+  <div class="title">SHAPES</div>
+  <div class="subtitle">YOU DON'T OVERPOWER THE CHAOS — YOU SURVIVE IT</div>
+
+  <div id="titleStep">
+    <div class="title-buttons">
+      <button class="title-btn" id="btnPlay">PLAY</button>
+      <button class="title-btn" id="btnCompendium">COMPENDIUM</button>
+      <button class="title-btn" id="btnOptions">OPTIONS</button>
+    </div>
+  </div>
+
+  <div id="compendiumStep" style="display:none;">
+    <div class="menu-step">COMPENDIUM</div>
+    <div class="compendium-tabs">
+      <button class="comp-tab active" data-comp="classes">CLASSES</button>
+      <button class="comp-tab" data-comp="enemies">ENEMIES</button>
+      <button class="comp-tab" data-comp="bosses">BOSSES</button>
+    </div>
+    <div id="compendiumContent"></div>
+    <button class="menu-back" id="backFromCompendium">BACK</button>
+  </div>
+
+  <div id="optionsStep" style="display:none;">
+    <div class="menu-step">OPTIONS</div>
+    <div class="options-list">
+      <div class="option-row">
+        <label for="masterVol">Master Volume</label>
+        <input type="range" id="masterVol" min="0" max="100" value="32">
+        <span id="masterVolVal">32%</span>
+      </div>
+      <button class="option-danger" id="resetSaveBtn">RESET SAVE DATA</button>
+    </div>
+    <button class="menu-back" id="backFromOptions">BACK</button>
+  </div>
+
+  <div id="modeStep" style="display:none;">
+    <div class="menu-step">1. Choose a mode</div>
+    <div class="mode-select">
+      <button class="mode-btn active" data-mode="intro">INTRO MODE</button>
+      <button class="mode-btn" data-mode="endless" id="endlessBtn">ENDLESS MODE</button>
+      <button class="mode-btn" data-mode="gauntlet">BOSS GAUNTLET</button>
+    </div>
+    <div class="mode-desc" id="modeDesc">Intro Mode: fixed teaching waves 1–10, then ramps into the point system.</div>
+
+    <div class="menu-step" style="margin-top:10px;">2. Choose a difficulty</div>
+    <div class="mode-select">
+      <button class="mode-btn active" data-difficulty="easy">EASY (0.5x)</button>
+      <button class="mode-btn" data-difficulty="normal">NORMAL (1.0x)</button>
+      <button class="mode-btn" data-difficulty="hard">HARD (1.5x)</button>
+    </div>
+    <div class="mode-desc" id="difficultyDesc">Easy (0.5x): full heal after every wave.</div>
+
+    <button class="menu-back" id="continueToClass">CONTINUE TO CLASS SELECT</button>
+    <button class="menu-back" id="backToTitle">BACK TO TITLE</button>
+  </div>
+
+  <div id="classStep">
+    <div class="menu-step">3. Choose your class</div>
+    <div class="class-select-layout">
+      <div class="classes" id="classGrid"></div>
+      <div class="upgrade-shop" id="upgradeShop">
+        <div class="shop-title">PRE-RUN UPGRADES</div>
+        <div class="shop-points">Points: <span id="shopPoints">0</span></div>
+        <div id="shopLines"></div>
+      </div>
+    </div>
+    <button class="menu-back" id="backToMode">BACK TO MODE SELECT</button>
+  </div>
+
+  <div class="hint">WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · RIGHT CLICK ABILITY · SPACE BLOCK</div>
+</div>
+
+<!-- Info modal for class info / unlock info -->
+<div id="infoModal" style="display:none;">
+  <div class="info-modal-box">
+    <div class="info-modal-title" id="infoModalTitle"></div>
+    <div class="info-modal-body" id="infoModalBody"></div>
+    <button id="infoModalClose">CLOSE</button>
+  </div>
+</div>
+
+<div id="boonMenu">
+  <div class="boon-wrap">
+    <div class="title">CHOOSE A BOON</div>
+    <div class="subtitle">Wave cleared. Pick one upgrade and keep going.</div>
+    <div class="boon-grid" id="boonGrid"></div>
+  </div>
+</div>
+
+<div id="gameover">
+  <h2>SURVIVAL ENDED</h2>
+  <div class="stats" id="goStats"></div>
+  <button onclick="location.reload()">TRY AGAIN</button>
+</div>
+
+<script src="SHAPES_V1.js"></script>
+</body>
+</html>
