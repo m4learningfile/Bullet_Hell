@@ -30,6 +30,8 @@ const CLASSES = {
   black:  { hp:2, cooldown:60, ability:'skullring',    duration:0.0,  color:'#bbbbbb', ringDmg:10 },
   yellow: { hp:1, cooldown:10, ability:'hexsummon',    duration:0.0,  color:'#ffdd00', baseMaxTri:6 },
   pink:   { hp:3, cooldown:4,  ability:'triangledash', duration:0.22, color:'#ff69b4' },
+  kite:   { hp:2, cooldown:0,  ability:'passivetrail', duration:0.0,  color:'#9fe8c8', speedMult:1.30, trailTickDmg:2, trailTick:0.6, baseTrailLen:220 },
+  crescent:{hp:2, cooldown:10, ability:'crescentform', duration:10.0, color:'#7b6dff', crescentDmg:2, crescentSpeed:900 },
 };
 
 const ENEMY_DEFS = {
@@ -180,6 +182,24 @@ const CLASS_INFO = {
     previewLong:'Nuker / AoE. Death Ring releases an expanding pulse from your skull that sweeps all the way to the arena\'s farthest corner, hitting every enemy in its path exactly once for 10 + 2× Skill Damage. 60-second cooldown — save it for boss waves or emergencies.',
     unlockHint:'Beat Boss Gauntlet on Hard.',
   },
+  kite:{
+    name:'KITE', hp:2, difficulty:'Medium', classType:'Zoner / Trail',
+    bulletDamage:1, skillName:'Ghost Trail', skillCooldown:'passive', skillDamage:2,
+    skillDescription:'A permanent mint trail follows behind you. Enemies pass through it freely but take 2 + Skill Damage every 0.6 seconds while standing on the line. Trail length grows with every Skill Cooldown boon (Skill Cooldown is repurposed here).',
+    quirks:'30% faster base move speed than every other class. Skill Cooldown boons extend the trail instead of reducing a cooldown. Fires normal bullets. No manual ability — the trail is always active.',
+    skillBrief:'Ghost Trail: Mint trail deals passive damage every 0.6s to enemies that cross it.',
+    previewLong:'Zoner with a permanent mint trail that damages anything crossing it every 0.6s. 30% faster move speed than the rest of the roster. Skill Cooldown boons lengthen the trail instead of shortening a cooldown. Still fires regular bullets — the trail is your second layer.',
+    unlockHint:'Always available.',
+  },
+  crescent:{
+    name:'CRESCENT', hp:2, difficulty:'Medium', classType:'Boomerang Bullets',
+    bulletDamage:1, skillName:'Crescent Form', skillCooldown:'10s duration + 10s cooldown', skillDamage:2,
+    skillDescription:'For 10 seconds your bullets transform into indigo crescents: piercing boomerangs that fly out to your cursor position and return, hitting enemies twice per shot. After the form ends, the 10-second cooldown begins. Skill Cooldown boons are repurposed to increase crescent bullet speed.',
+    quirks:'Skill Cooldown boons speed up your crescents instead of shortening the cooldown (no in-run cooldown reduction). Skill Damage boons still raise crescent damage normally.',
+    skillBrief:'Crescent Form: Bullets become piercing boomerangs for 10s.',
+    previewLong:'Boomerang specialist. While Crescent Form is active (10 seconds), every bullet you fire becomes a piercing indigo crescent that flies to your cursor and returns, damaging enemies twice. Skill Cooldown boons make the crescents faster; Skill Damage makes them hit harder.',
+    unlockHint:'Always available.',
+  },
 };
 function isUnlocked(cls) {
   if (saveData.adminMode) return true;
@@ -193,6 +213,8 @@ function isUnlocked(cls) {
     case 'yellow': return !!saveData.bossKills['hexagon:hard'];
     case 'pink':   return !!saveData.bossKills['triangle:hard'];
     case 'black':  return saveData.beatGauntletOn.includes('hard');
+    case 'kite':     return true;
+    case 'crescent': return true;
     default: return false;
   }
 }
@@ -525,6 +547,8 @@ function boonDesc(key, rarity) {
       return '+'+v+' bullet damage.';
     case 'skillCooldown':
       if(cls==='blue') return 'Big Ball gets '+v+' size tier'+(v>1?'s':'')+' bigger.';
+      if(cls==='kite') return '+'+(v*80)+'px ghost trail length.';
+      if(cls==='crescent') return '+'+(v*90)+' crescent bullet speed.';
       return 'Reduce ability cooldown (stacks with diminishing returns).';
     case 'blockCooldown':
       return 'Reduce block cooldown (stacks with diminishing returns).';
@@ -587,7 +611,8 @@ const LEGENDARY_DEFS = {
   borrowAbility:{ title:'Borrowed Power',   desc:'Gain a random weakened ability from another class. Fixed at pick time. Activate with T.',
     apply(){
       const p=game.player;
-      const others=Object.keys(CLASSES).filter(c=>c!==p.cls);
+      // V2: kite and crescent are too class-dependent to lend out
+      const others=Object.keys(CLASSES).filter(c=>c!==p.cls&&c!=='kite'&&c!=='crescent');
       const cls=others[Math.floor(Math.random()*others.length)];
       game.upgrades.borrowedAbility=cls;
       game.borrowed={ cls, t:0, active:0, charges:1, maxCharges:1 };
@@ -642,7 +667,10 @@ function rollBoonChoices(){
 }
 
 function effectiveAbilityCooldown(cls){
-  if(cls==='blue') return Math.max(1, 10*(1-game.preRunBonus.skillCooldown)*Math.pow(0.90,game.upgrades.skillCooldown));
+  // V2: Blue and Crescent have fixed in-run cooldowns (their Skill Cooldown boons are repurposed elsewhere)
+  if(cls==='blue') return Math.max(1, 10*(1-game.preRunBonus.skillCooldown)*Math.pow(0.90,0));
+  if(cls==='crescent') return Math.max(1, 20*(1-game.preRunBonus.skillCooldown)); // 10s form + 10s cooldown
+  if(cls==='kite') return 0.8; // passive — no cooldown
   const base=CLASSES[cls].cooldown||0;
   return Math.max(0.8, base*(1-game.preRunBonus.skillCooldown)*Math.pow(0.90,game.upgrades.skillCooldown));
 }
@@ -772,6 +800,11 @@ function makePlayer(cls){
     octaFireCd:0, angle:0,
     knockVx:0, knockVy:0, edgeHitCd:0,
     meleeHits:new Map(),
+    // V2 new classes
+    trail:[],                  // kite: array of {x,y} points
+    trailSampleDt:0,           // kite: time since last sample
+    trailHits:new Map(),       // kite: enemy -> remaining 0.6s tick cooldown
+    crescentActive:0,          // crescent: remaining duration seconds (0 = inactive)
   };
 }
 
@@ -805,6 +838,53 @@ function updatePlayer(dt){
   if(p.cls!=='yellow'&&game.upgrades.borrowedAbility==='yellow'){
     const maxTri=Math.min(6, 2+game.upgrades.shots);
     if(game.borrowed.t<=0&&game.hexTriangles.length<maxTri){ summonHexTriangle(); }
+  }
+
+  // V2: Kite ghost trail
+  if(p.cls==='kite'){
+    p.trailSampleDt+=dt;
+    if(p.trailSampleDt>=0.03){
+      p.trailSampleDt=0;
+      const last=p.trail[p.trail.length-1];
+      if(!last || dist2(last.x,last.y,p.x,p.y)>16){ p.trail.push({x:p.x,y:p.y}); }
+    }
+    // Trail length scales with Skill Cooldown boon (repurposed) + pre-run bonus
+    const base=CLASSES.kite.baseTrailLen;
+    const extra=game.upgrades.skillCooldown*80 + game.preRunBonus.skillCooldown*400;
+    const maxPoints=Math.max(8, Math.floor((base+extra)/12));
+    while(p.trail.length>maxPoints) p.trail.shift();
+    // Tick per-enemy hit cooldowns and deal damage to anyone on the line
+    if(p.trailHits){ for(const [e,cd] of p.trailHits){ const nx=cd-dt; if(nx<=0||e.hp<=0) p.trailHits.delete(e); else p.trailHits.set(e,nx); } }
+    const tickDmg=CLASSES.kite.trailTickDmg+game.upgrades.skillDamage*2;
+    for(const e of game.enemies){
+      if(e.hp<=0||e.state==='spawn'||e.type==='healthpack') continue;
+      if((p.trailHits&&p.trailHits.get(e)||0)>0) continue;
+      // Check segment proximity
+      let onTrail=false;
+      for(let i=1;i<p.trail.length;i++){
+        const a=p.trail[i-1], b=p.trail[i];
+        const vx=b.x-a.x, vy=b.y-a.y, wx=e.x-a.x, wy=e.y-a.y;
+        const segLen2=vx*vx+vy*vy; if(segLen2<1) continue;
+        const tProj=Math.max(0,Math.min(1,(wx*vx+wy*vy)/segLen2));
+        const px=a.x+vx*tProj, py=a.y+vy*tProj;
+        if(dist2(px,py,e.x,e.y)<(e.r+9)**2){ onTrail=true; break; }
+      }
+      if(onTrail){
+        e.hp-=tickDmg; e.hitFlash=0.15; game.stats.skillDamage+=tickDmg;
+        if(!p.trailHits) p.trailHits=new Map();
+        p.trailHits.set(e, CLASSES.kite.trailTick);
+        spawnParticles(e.x,e.y,CLASSES.kite.color,6,140);
+        if(e.hp<=0){ spawnParticles(e.x,e.y,hsl(e.hueA,80,70),14,180); Audio.blip(380+Math.random()*80,0.09,'sine',0.08); }
+      }
+    }
+  }
+
+  // V2: Crescent form timer — just ticks the active duration; game.ability.t handles cooldown
+  if(p.cls==='crescent'){
+    if(p.crescentActive>0){
+      p.crescentActive-=dt;
+      if(p.crescentActive<=0){ p.crescentActive=0; Audio.blip(220,0.15,'sawtooth',0.14); }
+    }
   }
 
   // Octa burst
@@ -858,9 +938,10 @@ function updatePlayer(dt){
     p.dashT-=dt; p.x+=p.dashVx*dt; p.y+=p.dashVy*dt;
   } else {
     const starBoost=(p.cls==='white'&&game.ability.active>0?CLASSES.white.speedMult:1);
+    const kiteBoost=(p.cls==='kite'?CLASSES.kite.speedMult:1);
     const boonBoost=1+game.upgrades.moveSpeed*0.10/(1+game.upgrades.moveSpeed*0.04);
     const preBoost=1+game.preRunBonus.moveSpeed;
-    const speed=PLAYER_SPEED*starBoost*boonBoost*preBoost;
+    const speed=PLAYER_SPEED*starBoost*kiteBoost*boonBoost*preBoost;
     p.x+=mx*speed*dt; p.y+=my*speed*dt;
   }
 
@@ -915,14 +996,36 @@ function updatePlayer(dt){
   const firing = mouse.down || mouse.toggleFire; // V2: supports toggle mode
   if(canFire&&firing&&p.fireCd<=0){
     const isShotgun=p.cls==='pink';
+    const crescentOn=(p.cls==='crescent'&&p.crescentActive>0);
     const totalShots=1+game.upgrades.shots, spreadStep=isShotgun?0.22:0.13, half=(totalShots-1)/2;
-    const bulletLife=isShotgun?0.5:1.5; // Triangle bullets only reach ~1/3 of the arena
-    for(let i=0;i<totalShots;i++){
-      const ang=p.angle+(i-half)*spreadStep;
-      game.playerBullets.push({ x:p.x+Math.cos(ang)*PLAYER_RADIUS, y:p.y+Math.sin(ang)*PLAYER_RADIUS, vx:Math.cos(ang)*PLAYER_BULLET_SPEED, vy:Math.sin(ang)*PLAYER_BULLET_SPEED, life:bulletLife, bouncesLeft:game.upgrades.bounce?1:0 });
+    const bulletLife=isShotgun?0.5:1.5;
+    // V2: Crescent form — piercing boomerang bullets that fly to cursor and return
+    if(crescentOn){
+      const aimX=game.aimX!==undefined?game.aimX:mouse.x, aimY=game.aimY!==undefined?game.aimY:mouse.y;
+      const dx=aimX-p.x, dy=aimY-p.y, m=Math.max(60,Math.hypot(dx,dy));
+      const nx=dx/m, ny=dy/m;
+      const spd=CLASSES.crescent.crescentSpeed + game.upgrades.skillCooldown*90;
+      const dmg=CLASSES.crescent.crescentDmg + game.upgrades.skillDamage*2;
+      for(let i=0;i<totalShots;i++){
+        const ang=p.angle+(i-half)*spreadStep;
+        game.playerBullets.push({
+          x:p.x+Math.cos(ang)*PLAYER_RADIUS, y:p.y+Math.sin(ang)*PLAYER_RADIUS,
+          vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
+          life:4.0, crescent:true, crescentSpd:spd, dmg,
+          maxTravel:m, travelled:0, returning:false, pierced:new WeakSet(),
+          bouncesLeft:0,
+        });
+      }
+      p.fireCd=1/PLAYER_FIRE_RATE;
+      Audio.blip(540+Math.random()*60,0.07,'triangle',0.1);
+    } else {
+      for(let i=0;i<totalShots;i++){
+        const ang=p.angle+(i-half)*spreadStep;
+        game.playerBullets.push({ x:p.x+Math.cos(ang)*PLAYER_RADIUS, y:p.y+Math.sin(ang)*PLAYER_RADIUS, vx:Math.cos(ang)*PLAYER_BULLET_SPEED, vy:Math.sin(ang)*PLAYER_BULLET_SPEED, life:bulletLife, bouncesLeft:game.upgrades.bounce?1:0 });
+      }
+      p.fireCd=1/PLAYER_FIRE_RATE;
+      Audio.blip(880+Math.random()*80,0.05,'square',0.08);
     }
-    p.fireCd=1/PLAYER_FIRE_RATE;
-    Audio.blip(880+Math.random()*80,0.05,'square',0.08);
   }
 
   // Block
@@ -1022,6 +1125,16 @@ function useAbility(){
     game.deathRings.push({ x:p.x, y:p.y, r:PLAYER_RADIUS+6, maxR:cornerDist+40, speed:520, dmg, hits:new Set() });
     game.ability.t=effectiveAbilityCooldown('black');
     Audio.noise(0.6,0.35); Audio.blip(80,0.5,'sawtooth',0.28);
+  } else if(p.cls==='kite'){
+    // Passive trail — no active ability
+    return;
+  } else if(p.cls==='crescent'){
+    if(game.ability.t>0||p.crescentActive>0) return;
+    p.crescentActive=CLASSES.crescent.duration;
+    game.ability.active=CLASSES.crescent.duration;
+    // Full cycle: 10s active form + 10s cooldown. HUD ticks down the combined total.
+    game.ability.t=CLASSES.crescent.duration+CLASSES.crescent.cooldown;
+    Audio.blip(500,0.2,'sine',0.16); Audio.blip(700,0.25,'triangle',0.14);
   }
 }
 
@@ -1430,33 +1543,49 @@ function updateBullets(dt){
   const pierceOn=!!game.upgrades.pierce;
 
   for(const b of game.playerBullets){
-    b.x+=b.vx*dt; b.y+=b.vy*dt; b.life-=dt;
-    if(!b.bigBall&&!b.ringShot&&b.bouncesLeft>0){
+    // V2: Crescent boomerang — travels outward to maxTravel, then returns to the player
+    if(b.crescent){
+      const p=game.player;
+      if(!b.returning){
+        b.x+=b.vx*dt; b.y+=b.vy*dt;
+        b.travelled+=Math.hypot(b.vx,b.vy)*dt;
+        if(b.travelled>=b.maxTravel){ b.returning=true; b.pierced=new WeakSet(); }
+      } else if(p){
+        const dx=p.x-b.x, dy=p.y-b.y, m=Math.hypot(dx,dy)||1;
+        b.vx=(dx/m)*b.crescentSpd; b.vy=(dy/m)*b.crescentSpd;
+        b.x+=b.vx*dt; b.y+=b.vy*dt;
+        if(m<PLAYER_RADIUS+8) b.life=0; // caught
+      } else { b.life=0; }
+      b.life-=dt;
+    } else {
+      b.x+=b.vx*dt; b.y+=b.vy*dt; b.life-=dt;
+    }
+    if(!b.bigBall&&!b.ringShot&&!b.crescent&&b.bouncesLeft>0){
       let bounced=false;
       if(b.x<A.x){b.x=A.x;b.vx=Math.abs(b.vx);bounced=true;}
       else if(b.x>A.x+A.w){b.x=A.x+A.w;b.vx=-Math.abs(b.vx);bounced=true;}
       if(b.y<A.y){b.y=A.y;b.vy=Math.abs(b.vy);bounced=true;}
       else if(b.y>A.y+A.h){b.y=A.y+A.h;b.vy=-Math.abs(b.vy);bounced=true;}
       if(bounced) b.bouncesLeft--;
-    } else {
+    } else if(!b.crescent) {
       const om=b.bigBall?(b.r||20):(b.ringShot?100:0);
       if(b.x<A.x-om||b.x>A.x+A.w+om||b.y<A.y-om||b.y>A.y+A.h+om) b.life=0;
     }
-    const piercingShot=b.bigBall||b.ringShot||pierceOn;
+    const piercingShot=b.bigBall||b.ringShot||b.crescent||pierceOn;
     for(const e of game.enemies){
       if(e.hp<=0||e.state==='spawn') continue;
       if(e.immuneToHits) continue;
       if(e.safeRadius){ const pl=game.player; if(pl&&dist2(pl.x,pl.y,e.x,e.y)>e.safeRadius*e.safeRadius) continue; }
-      const hitR=b.bigBall?(e.r+(b.r||20)):b.ringShot?(e.r+8):(e.r+4);
+      const hitR=b.bigBall?(e.r+(b.r||20)):b.ringShot?(e.r+8):b.crescent?(e.r+7):(e.r+4);
       if(dist2(b.x,b.y,e.x,e.y)<hitR*hitR){
         if(piercingShot){
           if(!b.pierced) b.pierced=new WeakSet();
           if(b.pierced.has(e)) continue;
           b.pierced.add(e);
-          const dmg=b.bigBall?(b.dmg||(PLAYER_BULLET_DMG+game.upgrades.damage)):b.ringShot?(b.dmg||10):(PLAYER_BULLET_DMG+game.upgrades.damage);
+          const dmg=b.bigBall?(b.dmg||(PLAYER_BULLET_DMG+game.upgrades.damage)):b.ringShot?(b.dmg||10):b.crescent?(b.dmg||2):(PLAYER_BULLET_DMG+game.upgrades.damage);
           e.hp-=dmg; e.hitFlash=b.bigBall?0.14:0.1;
-          if(b.bigBall||b.ringShot) game.stats.skillDamage+=dmg; else game.stats.bulletDamage+=dmg;
-          spawnParticles(e.x,e.y,b.bigBall?'#99e6ff':hsl(e.hueA,80,70),b.bigBall?8:4,b.bigBall?140:120);
+          if(b.bigBall||b.ringShot||b.crescent) game.stats.skillDamage+=dmg; else game.stats.bulletDamage+=dmg;
+          spawnParticles(e.x,e.y,b.bigBall?'#99e6ff':b.crescent?'#bcb0ff':hsl(e.hueA,80,70),b.bigBall?8:4,b.bigBall?140:120);
         } else {
           const dmg2=PLAYER_BULLET_DMG+game.upgrades.damage;
           e.hp-=dmg2; e.hitFlash=0.1; b.life=0;
@@ -1831,6 +1960,30 @@ function drawPlayer(){
   const p=game.player; if(!p) return;
   const blink=p.iframes>0&&Math.floor(p.iframes*20)%2===0;
 
+  // V2: Kite trail rendered behind the player
+  if(p.cls==='kite' && p.trail && p.trail.length>1){
+    ctx.save();
+    ctx.shadowColor=CLASSES.kite.color; ctx.shadowBlur=18;
+    ctx.strokeStyle=CLASSES.kite.color; ctx.lineWidth=6; ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(p.trail[0].x, p.trail[0].y);
+    for(let i=1;i<p.trail.length;i++) ctx.lineTo(p.trail[i].x, p.trail[i].y);
+    ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=2; ctx.shadowBlur=0;
+    ctx.beginPath(); ctx.moveTo(p.trail[0].x, p.trail[0].y);
+    for(let i=1;i<p.trail.length;i++) ctx.lineTo(p.trail[i].x, p.trail[i].y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // V2: Crescent form aura
+  if(p.cls==='crescent' && p.crescentActive>0){
+    ctx.save();
+    ctx.strokeStyle=CLASSES.crescent.color; ctx.shadowColor=CLASSES.crescent.color; ctx.shadowBlur=22; ctx.lineWidth=3;
+    const r=PLAYER_RADIUS+10+Math.sin(performance.now()*0.01)*2;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+
   if(p.cls==='white'&&game.ability.active>0){
     const hue=(performance.now()*0.5)%360;
     ctx.save(); ctx.shadowColor=hsl(hue,90,65); ctx.shadowBlur=30;
@@ -1897,6 +2050,16 @@ function drawPlayer(){
       ctx.beginPath(); ctx.arc(-R*0.3,-R*0.1,R*0.08,0,Math.PI*2); ctx.fill();
       ctx.beginPath(); ctx.arc(R*0.3,-R*0.1,R*0.08,0,Math.PI*2); ctx.fill();
     }
+  } else if(p.cls==='kite'){
+    // Elongated diamond shape for Kite
+    const R=PLAYER_RADIUS+3;
+    ctx.beginPath(); ctx.moveTo(0,-R*1.1); ctx.lineTo(R*0.75,0); ctx.lineTo(0,R*1.1); ctx.lineTo(-R*0.75,0); ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else if(p.cls==='crescent'){
+    // Crescent moon shape — negative-space cutout from a circle
+    const R=PLAYER_RADIUS+2;
+    ctx.beginPath(); ctx.arc(0,0,R,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.save(); ctx.globalCompositeOperation='destination-out';
+    ctx.beginPath(); ctx.arc(R*0.45,0,R*0.85,0,Math.PI*2); ctx.fill(); ctx.restore();
   }
   ctx.restore();
 
@@ -2045,6 +2208,16 @@ function drawBullets(){
     } else if(b.ringShot){
       ctx.shadowColor='#888';ctx.shadowBlur=10;ctx.fillStyle='rgba(180,180,180,0.9)';
       ctx.beginPath();ctx.arc(b.x,b.y,5,0,Math.PI*2);ctx.fill();
+    } else if(b.crescent){
+      // V2: indigo crescent bullet. Direction from velocity so it faces its travel
+      const ang=Math.atan2(b.vy,b.vx);
+      ctx.translate(b.x,b.y); ctx.rotate(ang);
+      ctx.shadowColor='#7b6dff'; ctx.shadowBlur=18;
+      ctx.fillStyle='#a79bff'; ctx.strokeStyle='#fff'; ctx.lineWidth=1.4;
+      ctx.beginPath();
+      ctx.arc(0,0,7,-Math.PI*0.75,Math.PI*0.75,false);
+      ctx.arc(3,0,5,Math.PI*0.6,-Math.PI*0.6,true);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
     } else {
       ctx.shadowColor='#fff';ctx.shadowBlur=14;ctx.fillStyle='#fff';
       ctx.beginPath();ctx.arc(b.x,b.y,3,0,Math.PI*2);ctx.fill();
@@ -2151,7 +2324,7 @@ function drawHUD(){
     abilRight=BASE_W/2+20+C.charges*44;
   } else {
     const prog=game.ability.t>0?game.ability.t/effectiveAbilityCooldown(p.cls):0;
-    const labelMap={orange:'PAUSE',white:'INVULN',blue:'ORB',purple:'BURST',red:'DASH',yellow:'SUMMON',pink:'DASH',black:'RING'};
+    const labelMap={orange:'PAUSE',white:'INVULN',blue:'ORB',purple:'BURST',red:'DASH',yellow:'SUMMON',pink:'DASH',black:'RING',kite:'TRAIL',crescent:'FORM'};
     drawCooldown(BASE_W/2+20,BASE_H-60,40,labelMap[p.cls]||'SKILL',prog,p.color);
     abilRight=BASE_W/2+64;
   }
@@ -2291,7 +2464,7 @@ const difficultyDescriptions = {
 };
 
 // ---- CLASS GRID ----
-const CLASS_ORDER = ['orange','white','green','blue','purple','red','yellow','pink','black'];
+const CLASS_ORDER = ['orange','white','green','blue','purple','red','yellow','pink','black','kite','crescent'];
 
 function classShapeSVG(cls, unlocked){
   if(unlocked===undefined) unlocked=true;
@@ -2306,6 +2479,15 @@ function classShapeSVG(cls, unlocked){
     case 'red':    return '<svg width="48" height="48" viewBox="0 0 48 48"><polygon points="14,12 34,12 42,38 6,38" fill="'+c+'" stroke="'+stroke+'" stroke-width="2"/></svg>';
     case 'yellow': return '<svg width="48" height="48" viewBox="0 0 48 48"><polygon points="24,4 42,14 42,34 24,44 6,34 6,14" fill="'+c+'" stroke="'+stroke+'" stroke-width="2"/></svg>';
     case 'pink':   return '<svg width="48" height="48" viewBox="0 0 48 48"><polygon points="24,6 42,40 6,40" fill="'+c+'" stroke="'+stroke+'" stroke-width="2"/></svg>';
+    case 'kite': {
+      // Kite diamond (elongated) with a tail
+      if(!unlocked) return '<svg width="48" height="48" viewBox="0 0 48 48"><polygon points="24,4 40,22 24,44 8,22" fill="#151515" stroke="#333" stroke-width="2"/></svg>';
+      return '<svg width="48" height="48" viewBox="0 0 48 48"><polygon points="24,4 40,22 24,44 8,22" fill="'+c+'" stroke="#fff" stroke-width="2"/><line x1="24" y1="44" x2="24" y2="48" stroke="'+c+'" stroke-width="2"/></svg>';
+    }
+    case 'crescent': {
+      if(!unlocked) return '<svg width="48" height="48" viewBox="0 0 48 48"><path d="M 34 24 A 14 14 0 1 1 14 14 A 10 10 0 1 0 34 24 Z" fill="#151515" stroke="#333" stroke-width="2"/></svg>';
+      return '<svg width="48" height="48" viewBox="0 0 48 48"><path d="M 34 24 A 14 14 0 1 1 14 14 A 10 10 0 1 0 34 24 Z" fill="'+c+'" stroke="#fff" stroke-width="2"/></svg>';
+    }
     case 'black': {
       const r=18, cx=24, cy=24;
       const dome='M '+(cx-r*0.85)+','+(cy-r*0.1)+' A '+(r*0.85)+','+(r*0.85)+' 0 0 1 '+(cx+r*0.85)+','+(cy-r*0.1)+' L '+(cx+r*0.55)+','+(cy+r*0.45)+' L '+(cx+r*0.25)+','+(cy+r*0.45)+' L '+(cx+r*0.2)+','+(cy+r*0.75)+' L '+(cx-r*0.2)+','+(cy+r*0.75)+' L '+(cx-r*0.25)+','+(cy+r*0.45)+' L '+(cx-r*0.55)+','+(cy+r*0.45)+' Z';
