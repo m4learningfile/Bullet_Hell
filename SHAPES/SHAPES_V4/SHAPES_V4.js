@@ -194,10 +194,10 @@ const CLASS_INFO = {
   crescent:{
     name:'CRESCENT', hp:2, difficulty:'Medium', classType:'Boomerang Bullets',
     bulletDamage:1, skillName:'Crescent Form', skillCooldown:'10s duration + cooldown', skillDamage:'Boomerang Speed',
-    skillDescription:'For 10 seconds your bullets transform into indigo crescents: piercing boomerangs that fly out to your cursor position and return, hitting enemies twice per shot. After the form ends, the cooldown begins normally and can be reduced by Skill Cooldown boons.',
-    quirks:'Crescent boomerangs deal 2× Bullet Damage and do not gain bonus damage from Skill Damage. Their base movement speed is reduced by 20%, while Skill Damage boons now make the boomerangs travel faster.',
+    skillDescription:'For 10 seconds your bullets transform into indigo crescents: piercing boomerangs that fly out to your cursor position and return. Only one volley can be active at a time, so you must wait for it to come back before firing again. After the form ends, the cooldown begins normally and can be reduced by Skill Cooldown boons.',
+    quirks:'Crescent boomerangs deal 4× Bullet Damage and do not gain bonus damage from Skill Damage. Their base movement speed is reduced by 30%, only one volley can be active at a time, and Skill Damage increases boomerang speed at a reduced rate.',
     skillBrief:'Crescent Form: Bullets become piercing boomerangs for 10s.',
-    previewLong:'Boomerang specialist. While Crescent Form is active (10 seconds), every bullet you fire becomes a piercing indigo crescent that flies to your cursor and returns, damaging enemies twice. Skill Cooldown lowers the form\'s cooldown normally, while Skill Damage speeds the boomerangs up. Crescent damage scales only from Bullet Damage.',
+    previewLong:'Boomerang specialist. While Crescent Form is active (10 seconds), every shot becomes a piercing indigo crescent volley that flies to your cursor and returns. Only one volley can be active at a time. Skill Cooldown lowers the form\'s cooldown normally, while Skill Damage speeds the boomerangs up at a reduced rate. Each hit scales only from Bullet Damage and deals 4× bullet damage.',
     unlockHint:'Always available.',
   },
 };
@@ -1015,23 +1015,27 @@ function updatePlayer(dt){
     const bulletLife=isShotgun?0.5:1.5;
     // V2: Crescent form — piercing boomerang bullets that fly to cursor and return
     if(crescentOn){
-      const aimX=game.aimX!==undefined?game.aimX:mouse.x, aimY=game.aimY!==undefined?game.aimY:mouse.y;
-      const dx=aimX-p.x, dy=aimY-p.y, m=Math.max(60,Math.hypot(dx,dy));
-      const nx=dx/m, ny=dy/m;
-      const spd=CLASSES.crescent.crescentSpeed*0.8 + game.upgrades.skillDamage*30;
-      const dmg=(PLAYER_BULLET_DMG+game.upgrades.damage)*2;
-      for(let i=0;i<totalShots;i++){
-        const ang=p.angle+(i-half)*spreadStep;
-        game.playerBullets.push({
-          x:p.x+Math.cos(ang)*playerRadius(p), y:p.y+Math.sin(ang)*playerRadius(p),
-          vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
-          life:4.0, crescent:true, crescentSpd:spd, dmg,
-          maxTravel:m, travelled:0, returning:false, pierced:new WeakSet(),
-          bouncesLeft:0,
-        });
+      const activeCrescents = game.playerBullets.filter(b=>b.crescent&&b.life>0).length;
+      if(activeCrescents===0){
+        const aimX=game.aimX!==undefined?game.aimX:mouse.x, aimY=game.aimY!==undefined?game.aimY:mouse.y;
+        const dx=aimX-p.x, dy=aimY-p.y, m=Math.max(60,Math.hypot(dx,dy));
+        const spd=CLASSES.crescent.crescentSpeed*0.7 + game.upgrades.skillDamage*18;
+        const dmg=(PLAYER_BULLET_DMG+game.upgrades.damage)*4;
+        for(let i=0;i<totalShots;i++){
+          const ang=p.angle+(i-half)*spreadStep;
+          game.playerBullets.push({
+            x:p.x+Math.cos(ang)*playerRadius(p), y:p.y+Math.sin(ang)*playerRadius(p),
+            vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
+            life:4.0, crescent:true, crescentSpd:spd, dmg,
+            maxTravel:m, travelled:0, returning:false, pierced:new WeakSet(),
+            bouncesLeft:0,
+          });
+        }
+        p.fireCd=1/(PLAYER_FIRE_RATE*0.6);
+        Audio.blip(540+Math.random()*60,0.07,'triangle',0.1);
+      } else {
+        p.fireCd=Math.max(p.fireCd,0.08);
       }
-      p.fireCd=1/PLAYER_FIRE_RATE;
-      Audio.blip(540+Math.random()*60,0.07,'triangle',0.1);
     } else {
       for(let i=0;i<totalShots;i++){
         const ang=p.angle+(i-half)*spreadStep;
@@ -1270,7 +1274,7 @@ function updateHexTriangles(dt){
     const dx=tx-t.x, dy=ty-t.y, d=Math.hypot(dx,dy)||1;
     if(d>10){ t.x+=(dx/d)*triSpeed*dt; t.y+=(dy/d)*triSpeed*dt; }
 
-    // Contact damage
+    // Contact damage (never interacts with health packs)
     for(const e of game.enemies){
       if(e.hp<=0||e.state==='spawn'||e.type==='healthpack') continue;
       if(dist2(t.x,t.y,e.x,e.y)<(e.r+12)**2){
@@ -1283,6 +1287,15 @@ function updateHexTriangles(dt){
         spawnParticles(t.x,t.y,'#ffdd00',4,120);
         spawnParticles(e.x,e.y,'#ffdd00',6,160);
         if(e.hp<=0){ spawnParticles(e.x,e.y,hsl(e.hueA,80,70),16,200); Audio.blip(300+Math.random()*80,0.12,'square',0.08); }
+      }
+    }
+
+    // Extra safety: if a triangle overlaps a health pack, ignore it completely
+    for(const e of game.enemies){
+      if(e.type!=='healthpack') continue;
+      if(dist2(t.x,t.y,e.x,e.y)<(e.r+12)**2){
+        if(!t.hitCD) t.hitCD=new Map();
+        t.hitCD.delete(e);
       }
     }
     t.x=clamp(t.x,A.x+10,A.x+A.w-10);
