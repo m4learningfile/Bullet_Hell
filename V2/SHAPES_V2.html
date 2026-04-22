@@ -18,6 +18,7 @@
     <div class="title-buttons">
       <button class="title-btn" id="btnPlay">PLAY</button>
       <button class="title-btn" id="btnCompendium">COMPENDIUM</button>
+      <button class="title-btn" id="btnMemoryHall">MEMORY HALL</button>
       <button class="title-btn" id="btnOptions">OPTIONS</button>
     </div>
     <div id="adminHint">admin…</div>
@@ -26,6 +27,23 @@
       <button id="adminSubmit">ENTER</button>
       <div id="adminStatus"></div>
     </div>
+  </div>
+
+  <div id="memoryHallStep" style="display:none;">
+    <div class="menu-step">MEMORY HALL</div>
+    <div class="mh-top">
+      <div class="mh-panel mh-best-stats" id="mhBestStats">No endless run recorded yet.</div>
+      <div class="mh-best-wave" id="mhBestWave">
+        <div class="mh-label">BEST ENDLESS WAVE</div>
+        <div class="mh-num" id="mhBestNum">—</div>
+      </div>
+      <div class="mh-panel mh-selected-stats" id="mhSelectedStats">Click a class below to view its best run.</div>
+    </div>
+    <div class="mh-rows">
+      <div class="mh-row" id="mhRow1"></div>
+      <div class="mh-row" id="mhRow2"></div>
+    </div>
+    <button class="menu-back" id="backFromMemoryHall">BACK</button>
   </div>
 
   <div id="compendiumStep" style="display:none;">
@@ -52,6 +70,18 @@
         <input type="checkbox" id="eliteToggle">
       </div>
       <div class="option-desc">When enabled, some enemies in each wave become stronger (more HP &amp; speed) but award extra points on death. Helps combat overcrowding at higher waves.</div>
+      <div class="option-row">
+        <label for="shootMode">Shooting</label>
+        <select id="shootMode">
+          <option value="hold">Hold to shoot</option>
+          <option value="toggle">Toggle (click once on/off)</option>
+        </select>
+      </div>
+      <div class="option-row option-row-check">
+        <label for="autoAimToggle">Auto-aim at nearest enemy</label>
+        <input type="checkbox" id="autoAimToggle">
+      </div>
+      <div class="option-desc">Auto-aim overrides your mouse direction for shooting and abilities, pointing at the closest enemy.</div>
       <button class="option-danger" id="resetSaveBtn">RESET SAVE DATA</button>
     </div>
     <button class="menu-back" id="backFromOptions">BACK</button>

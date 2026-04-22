@@ -66,8 +66,10 @@ function defaultSave() {
     beatGauntletOn: [],
     preRunUpgrades: { damage:0, skillDamage:0, hp:0, skillCooldown:0, moveSpeed:0, blockCooldown:0, shots:0 },
     disabledUpgrades: {},
-    options: { masterVolume: 0.32, eliteEnemies: false },
+    options: { masterVolume: 0.32, eliteEnemies: false, shootMode: 'hold', autoAim: false },
     adminMode: false,
+    classBestRuns: {},   // per-class best run: { cls: { wave, mode, difficulty, time, enemiesKilled, bulletDamage, skillDamage, date } }
+    bestEndless: null,   // overall best endless run
   };
 }
 function loadSave() {
@@ -85,6 +87,8 @@ function loadSave() {
       disabledUpgrades: d.disabledUpgrades||{},
       options: Object.assign({},def.options,d.options||{}),
       adminMode: !!d.adminMode,
+      classBestRuns: d.classBestRuns||{},
+      bestEndless: d.bestEndless||null,
     };
   } catch(e) { return defaultSave(); }
 }
@@ -152,10 +156,10 @@ const CLASS_INFO = {
   yellow:{
     name:'HEXAGON', hp:1, difficulty:'Hard', classType:'Minion Master',
     bulletDamage:'—', skillName:'Triangle Swarm', skillCooldown:'auto', skillDamage:2,
-    skillDescription:'Cannot shoot. Instead, auto-summons pink triangle allies that seek and dash into enemies for 2 damage per hit. Each ally has 15 HP and loses 1 HP every time it connects. Borrowed Power version also auto-summons (cap of 2, up to 6 with Extra Shots).',
+    skillDescription:'Cannot shoot. Instead, auto-summons pink triangle allies. Each ally has 30 HP. Triangles follow your cursor while the shoot button is held; otherwise they seek nearby enemies. Contact deals 2 + Skill Damage on a 0.5s per-target cooldown and costs the triangle 1 HP per hit. Borrowed Power version also auto-summons (cap of 2, up to 6 with Extra Shots).',
     quirks:'Base cap is 6 triangles; +1 per Extra Shots boon (max 10). HP boons give +1 HP to the hexagon and +2 HP to every triangle per rarity level (common +1/+2, rare +2/+4, epic +4/+8).',
     skillBrief:'Triangle Swarm: Auto-summons triangle allies to fight for you.',
-    previewLong:'Minion master at 1 HP. Cannot shoot. Instead, pink triangle allies are auto-summoned up to a cap (6 base, +1 per Extra Shots, max 10). Each triangle dashes into enemies for 2 dmg and has 15 HP, losing 1 HP per hit. HP boons buff both you and the swarm.',
+    previewLong:'Minion master at 1 HP. Cannot shoot. Instead, up to 6 triangle allies (max 10 with Extra Shots) are auto-summoned. Triangles follow your cursor while the shoot button is held; contact deals 2 + Skill Damage per 0.5s per enemy. Each triangle has 30 HP and loses 1 per hit. HP boons buff both you and the swarm.',
     unlockHint:'Kill the Hexagon boss on Hard.',
   },
   pink:{
@@ -293,8 +297,23 @@ canvas.addEventListener('mousemove', e=>{
   mouse.x=(e.clientX-r.left)/r.width*BASE_W;
   mouse.y=(e.clientY-r.top)/r.height*BASE_H;
 });
-canvas.addEventListener('mousedown', e=>{ if(e.button===0)mouse.down=true; if(e.button===2)mouse.right=true; });
-canvas.addEventListener('mouseup',   e=>{ if(e.button===0)mouse.down=false; if(e.button===2)mouse.right=false; });
+canvas.addEventListener('mousedown', e=>{
+  if(game.state!=='playing') return;
+  if(e.button===0){
+    if(saveData.options&&saveData.options.shootMode==='toggle'){ mouse.toggleFire=!mouse.toggleFire; }
+    else mouse.down=true;
+  }
+  if(e.button===2) mouse.right=true;
+});
+canvas.addEventListener('mouseup',   e=>{
+  if(e.button===0 && (!saveData.options||saveData.options.shootMode!=='toggle')) mouse.down=false;
+  if(e.button===2) mouse.right=false;
+});
+// V2: When the mouse is released outside the canvas, drop hold-fire (toggle mode is unaffected)
+window.addEventListener('mouseup', ()=>{
+  if(!saveData.options||saveData.options.shootMode!=='toggle') mouse.down=false;
+  mouse.right=false;
+});
 canvas.addEventListener('contextmenu', e=>e.preventDefault());
 
 // ============================================================
@@ -512,7 +531,11 @@ function boonDesc(key, rarity) {
     case 'skillDamage':
       if(cls==='purple') return '+'+(0.2*v).toFixed(1)+'s Octagon burst duration.';
       if(cls==='red')    return 'No effect (Trapezoid has no skill damage).';
-      if(cls==='black')  return '+'+(v*2)+' ring damage (2x effective for Skull).';
+      if(cls==='black')  return '+'+(v*3)+' ring damage (3× effective for Skull).';
+      if(cls==='blue')   return '+'+(v*3)+' Big Ball damage (3× effective for Circle).';
+      if(cls==='orange') return '+'+(v*2)+' Time Pause shockwave damage.';
+      if(cls==='green')  return '+'+(v*2)+' Dash damage per enemy.';
+      if(cls==='yellow') return '+'+v+' damage per triangle hit.';
       if(cls==='pink')   return '+'+(v*20)+'px dash range.';
       return '+'+v+' damage to damaging abilities.';
     case 'moveSpeed':
@@ -637,6 +660,7 @@ function effectiveBlockCooldown(){
 
 function openBoonMenu(){
   game.state='boonselect';
+  mouse.down=false; mouse.right=false; // V2: stop firing while the menu is up
   const grid=document.getElementById('boonGrid');
   grid.innerHTML='';
   const picks=rollBoonChoices();
@@ -701,6 +725,7 @@ const game = {
   preRunBonus:{ damage:0, skillDamage:0, hp:0, skillCooldown:0, moveSpeed:0, blockCooldown:0 },
   yellowTriHpBonus:0,
   trapWindUp:0, trapWindDir:{ x:0, y:0 },
+  aimX:0, aimY:0,
   runTime:0,
   stats:{ enemiesKilled:0, bossesKilled:0, bulletDamage:0, skillDamage:0 },
 };
@@ -870,12 +895,25 @@ function updatePlayer(dt){
       else p.meleeHits.set(e,nx);
     }
   }
-  p.angle=Math.atan2(mouse.y-p.y, mouse.x-p.x);
+  // V2: auto-aim option targets the nearest enemy instead of the mouse
+  let aimX=mouse.x, aimY=mouse.y;
+  if(saveData.options&&saveData.options.autoAim){
+    let nearest=null, nD2=Infinity;
+    for(const e of game.enemies){
+      if(e.state==='spawn'||e.hp<=0||e.type==='healthpack') continue;
+      const d2=dist2(p.x,p.y,e.x,e.y);
+      if(d2<nD2){ nD2=d2; nearest=e; }
+    }
+    if(nearest){ aimX=nearest.x; aimY=nearest.y; }
+  }
+  game.aimX=aimX; game.aimY=aimY;
+  p.angle=Math.atan2(aimY-p.y, aimX-p.x);
 
-  // Firing (red and yellow don't fire bullets)
+  // Firing (red and yellow don't fire bullets; only fire during actual play)
   if(p.fireCd>0) p.fireCd-=dt;
-  const canFire = p.cls!=='red'&&p.cls!=='yellow';
-  if(canFire&&mouse.down&&p.fireCd<=0){
+  const canFire = p.cls!=='red'&&p.cls!=='yellow'&&game.state==='playing';
+  const firing = mouse.down || mouse.toggleFire; // V2: supports toggle mode
+  if(canFire&&firing&&p.fireCd<=0){
     const isShotgun=p.cls==='pink';
     const totalShots=1+game.upgrades.shots, spreadStep=isShotgun?0.22:0.13, half=(totalShots-1)/2;
     const bulletLife=isShotgun?0.5:1.5; // Triangle bullets only reach ~1/3 of the arena
@@ -899,7 +937,7 @@ function updatePlayer(dt){
 
 function summonHexTriangle(){
   const p=game.player; if(!p) return;
-  const baseHp=15+(game.yellowTriHpBonus||0);
+  const baseHp=30+(game.yellowTriHpBonus||0);
   game.hexTriangles.push({ x:p.x+(Math.random()-0.5)*50, y:p.y+(Math.random()-0.5)*50, hp:baseHp, maxHp:baseHp, angle:Math.random()*Math.PI*2, dashT:0, dashVx:0, dashVy:0, stateT:0.5, dashHits:null });
   if(p.cls==='yellow') game.ability.t=effectiveAbilityCooldown('yellow');
   else if(game.upgrades.borrowedAbility==='yellow') game.borrowed.t=effectiveBorrowedCooldown('yellow');
@@ -922,7 +960,8 @@ function useAbility(){
     if(game.ability.t>0) return;
     game.timeFreezeT=C.duration; game.timeScale=0;
     game.ability.t=effectiveAbilityCooldown(p.cls); game.ability.active=C.duration;
-    for(const e of game.enemies){ if(e.state==='spawn'||e.immuneToHits) continue; e.hp-=(C.abilityDmg+game.upgrades.skillDamage); e.hitFlash=0.2; spawnParticles(e.x,e.y,hsl(25,100,70),10,200); }
+    const dmg=C.abilityDmg+game.upgrades.skillDamage*2; // V2: 2× scaling
+    for(const e of game.enemies){ if(e.state==='spawn'||e.immuneToHits) continue; e.hp-=dmg; e.hitFlash=0.2; game.stats.skillDamage+=dmg; spawnParticles(e.x,e.y,hsl(25,100,70),10,200); }
     game.shake=Math.max(game.shake,10); Audio.noise(0.35,0.22); Audio.blip(120,0.5,'sine',0.2);
   } else if(p.cls==='white'){
     if(game.ability.t>0) return;
@@ -930,16 +969,16 @@ function useAbility(){
     Audio.blip(660,0.3,'sawtooth',0.2);
   } else if(p.cls==='green'){
     if(game.ability.charges<=0) return;
-    let dmx=mouse.x-p.x,dmy=mouse.y-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
+    let dmx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dmy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
     p.dashVx=dmx*1400; p.dashVy=dmy*1400; p.dashT=C.duration;
     p.iframes=Math.max(p.iframes,C.duration+0.08); p.dashHits=new Set();
     game.ability.charges--; if(game.ability.t<=0) game.ability.t=effectiveAbilityCooldown(p.cls);
     Audio.blip(1200,0.1,'square',0.15);
   } else if(p.cls==='blue'){
     if(game.ability.t>0) return;
-    const dx=mouse.x-p.x,dy=mouse.y-p.y,m=Math.hypot(dx,dy)||1;
+    const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
     const radius=C.ballRadius+game.upgrades.blueBallSize*5;
-    game.playerBullets.push({ x:p.x+(dx/m)*(PLAYER_RADIUS+4),y:p.y+(dy/m)*(PLAYER_RADIUS+4),vx:(dx/m)*C.ballSpeed,vy:(dy/m)*C.ballSpeed,life:6,bigBall:true,r:radius,dmg:C.ballDmg+game.upgrades.skillDamage,pierced:new WeakSet() });
+    game.playerBullets.push({ x:p.x+(dx/m)*(PLAYER_RADIUS+4),y:p.y+(dy/m)*(PLAYER_RADIUS+4),vx:(dx/m)*C.ballSpeed,vy:(dy/m)*C.ballSpeed,life:6,bigBall:true,r:radius,dmg:C.ballDmg+game.upgrades.skillDamage*3,pierced:new WeakSet() });
     game.ability.t=effectiveAbilityCooldown(p.cls);
     Audio.blip(320,0.18,'sine',0.16);
   } else if(p.cls==='purple'){
@@ -949,7 +988,7 @@ function useAbility(){
   } else if(p.cls==='red'){
     if(game.ability.t>0||game.trapWindUp>0) return;
     // Start wind-up
-    const dx=mouse.x-p.x,dy=mouse.y-p.y,m=Math.hypot(dx,dy)||1;
+    const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
     game.trapWindDir={ x:dx/m, y:dy/m }; game.trapWindUp=CLASSES.red.windUp;
     game.ability.t=effectiveAbilityCooldown('red');
     Audio.blip(400,0.18,'sine',0.10);
@@ -959,7 +998,7 @@ function useAbility(){
     summonHexTriangle();
   } else if(p.cls==='pink'){
     if(game.ability.t>0) return;
-    const dx=mouse.x-p.x,dy=mouse.y-p.y,m=Math.hypot(dx,dy)||1;
+    const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
     const baseRange=220, rangeBonus=Math.min(50,game.upgrades.skillDamage*10);
     const maxRange=baseRange+rangeBonus;
     const actualDist=Math.min(m,maxRange);
@@ -972,7 +1011,7 @@ function useAbility(){
     Audio.blip(900,0.1,'triangle',0.12);
   } else if(p.cls==='black'){
     if(game.ability.t>0) return;
-    const dmg=CLASSES.black.ringDmg+game.upgrades.skillDamage*2;
+    const dmg=CLASSES.black.ringDmg+game.upgrades.skillDamage*3;
     const A=arenaRect();
     const cornerDist=Math.max(
       Math.hypot(p.x-A.x,       p.y-A.y),
@@ -1003,12 +1042,12 @@ function useBorrowedAbility(){
     p.iframes=Math.max(p.iframes,dur); B.t=cd; B.active=dur;
   } else if(bcls==='green'){
     if(B.charges<=0)return; // weakened: 1 charge instead of 2
-    let dmx=mouse.x-p.x,dmy=mouse.y-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
+    let dmx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dmy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
     p.dashVx=dmx*1400; p.dashVy=dmy*1400; p.dashT=C.duration; p.iframes=Math.max(p.iframes,C.duration+0.08); p.dashHits=new Set();
     B.charges--; if(B.t<=0) B.t=cd;
   } else if(bcls==='blue'){
     if(B.t>0)return; // weakened: 15s cooldown instead of 10s (via BORROWED_COOLDOWNS)
-    const dx=mouse.x-p.x,dy=mouse.y-p.y,m=Math.hypot(dx,dy)||1;
+    const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
     const radius=C.ballRadius+game.upgrades.blueBallSize*5;
     game.playerBullets.push({ x:p.x+(dx/m)*(PLAYER_RADIUS+4),y:p.y+(dy/m)*(PLAYER_RADIUS+4),vx:(dx/m)*C.ballSpeed,vy:(dy/m)*C.ballSpeed,life:6,bigBall:true,r:radius,dmg:C.ballDmg+game.upgrades.skillDamage,pierced:new WeakSet() });
     B.t=cd;
@@ -1018,7 +1057,7 @@ function useBorrowedAbility(){
     B.t=cd; p.octaFireCdB=0;
   } else if(bcls==='red'){
     if(B.t>0)return; // weakened: 10s cooldown, scales off skill damage
-    let dmx=mouse.x-p.x,dmy=mouse.y-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
+    let dmx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dmy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
     p.dashVx=dmx*1200; p.dashVy=dmy*1200; p.dashT=0.25;
     p.iframes=Math.max(p.iframes,p.dashT+0.08);
     p.dashHits=new Set();
@@ -1031,7 +1070,7 @@ function useBorrowedAbility(){
     B.t=cd;
   } else if(bcls==='pink'){
     if(B.t>0)return;
-    const dx=mouse.x-p.x,dy=mouse.y-p.y,m=Math.hypot(dx,dy)||1;
+    const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
     const baseRange=200, rangeBonus=Math.min(40,game.upgrades.skillDamage*8);
     const maxRange=baseRange+rangeBonus;
     const actualDist=Math.min(m,maxRange);
@@ -1081,38 +1120,42 @@ function updateHexTriangles(dt){
   const preBoost=1+game.preRunBonus.moveSpeed;
   const triSpeed=PLAYER_SPEED*1.25*boonBoost*preBoost;
 
+  // V2: Triangles no longer dash. They follow cursor while shooting; otherwise drift toward player/enemies.
+  //     Contact with enemies deals skill-damage-scaling damage on a 0.5s per-target cooldown.
+  const firingHeld = mouse.down || mouse.toggleFire;
   for(let i=game.hexTriangles.length-1;i>=0;i--){
     const t=game.hexTriangles[i];
     if(t.hp<=0){ spawnParticles(t.x,t.y,'#ff69b4',12,180); game.hexTriangles.splice(i,1); continue; }
     t.angle+=dt*3;
-    let nearest=null, nD2=Infinity;
-    for(const e of game.enemies){ if(e.state==='spawn'||e.hp<=0) continue; const d2=dist2(t.x,t.y,e.x,e.y); if(d2<nD2){nD2=d2;nearest=e;} }
-    if(t.dashT>0){
-      t.dashT-=dt; t.x+=t.dashVx*dt; t.y+=t.dashVy*dt;
-      for(const e of game.enemies){
-        if(e.hp<=0||e.state==='spawn') continue;
-        if(!t.dashHits) t.dashHits=new Set();
-        if(t.dashHits.has(e)) continue;
-        if(dist2(t.x,t.y,e.x,e.y)<(e.r+10)**2){
-          e.hp-=2; e.hitFlash=0.12; t.dashHits.add(e);
-          t.hp-=1; spawnParticles(t.x,t.y,'#ffdd00',4,120);
-          spawnParticles(e.x,e.y,'#ffdd00',6,160);
-          if(e.hp<=0){ spawnParticles(e.x,e.y,hsl(e.hueA,80,70),16,200); Audio.blip(300+Math.random()*80,0.12,'square',0.08); }
-        }
-      }
-      if(t.dashT<=0){ t.stateT=0.8+Math.random()*0.5; t.dashHits=null; }
-    } else {
-      t.stateT=(t.stateT||0)-dt;
-      if(nearest){
-        const dx=nearest.x-t.x,dy=nearest.y-t.y,d=Math.hypot(dx,dy)||1;
-        t.x+=(dx/d)*triSpeed*dt; t.y+=(dy/d)*triSpeed*dt;
-        if(t.stateT<=0&&d<nearest.r+90){
-          t.dashVx=(dx/d)*triSpeed*3.5; t.dashVy=(dy/d)*triSpeed*3.5;
-          t.dashT=0.28; t.stateT=1.0+Math.random()*0.5;
-        }
-      } else {
-        const dx=p.x-t.x,dy=p.y-t.y,d=Math.hypot(dx,dy)||1;
-        if(d>60){ t.x+=(dx/d)*triSpeed*0.4*dt; t.y+=(dy/d)*triSpeed*0.4*dt; }
+    // Tick per-enemy contact cooldowns
+    if(t.hitCD){ for(const [e,cd] of t.hitCD){ const nx=cd-dt; if(nx<=0||e.hp<=0) t.hitCD.delete(e); else t.hitCD.set(e,nx); } }
+
+    // Movement target
+    let tx, ty;
+    if(firingHeld){ tx=game.aimX; ty=game.aimY; }
+    else {
+      // Seek nearest enemy (excluding health packs), or loiter near the player
+      let nearest=null, nD2=Infinity;
+      for(const e of game.enemies){ if(e.state==='spawn'||e.hp<=0||e.type==='healthpack') continue; const d2=dist2(t.x,t.y,e.x,e.y); if(d2<nD2){nD2=d2;nearest=e;} }
+      if(nearest){ tx=nearest.x; ty=nearest.y; }
+      else { tx=p.x; ty=p.y; }
+    }
+    const dx=tx-t.x, dy=ty-t.y, d=Math.hypot(dx,dy)||1;
+    if(d>10){ t.x+=(dx/d)*triSpeed*dt; t.y+=(dy/d)*triSpeed*dt; }
+
+    // Contact damage
+    for(const e of game.enemies){
+      if(e.hp<=0||e.state==='spawn'||e.type==='healthpack') continue;
+      if(dist2(t.x,t.y,e.x,e.y)<(e.r+12)**2){
+        if(!t.hitCD) t.hitCD=new Map();
+        if((t.hitCD.get(e)||0)>0) continue;
+        const td=2+game.upgrades.skillDamage;
+        e.hp-=td; e.hitFlash=0.12; game.stats.skillDamage+=td;
+        t.hitCD.set(e, 0.5);
+        t.hp-=1;
+        spawnParticles(t.x,t.y,'#ffdd00',4,120);
+        spawnParticles(e.x,e.y,'#ffdd00',6,160);
+        if(e.hp<=0){ spawnParticles(e.x,e.y,hsl(e.hueA,80,70),16,200); Audio.blip(300+Math.random()*80,0.12,'square',0.08); }
       }
     }
     t.x=clamp(t.x,A.x+10,A.x+A.w-10);
@@ -1162,7 +1205,7 @@ function spawnEnemy(type, opts={}){
   }
   const bossScale=opts.boss?getBossScale():{hp:1,speed:1};
   const runScale=getEnemyRunScale();
-  const bossSizeMul=opts.boss?(type==='trapezoid'?0.72:1.8):1.0; // V2: trapezoid boss is 40% of old size
+  const bossSizeMul=opts.boss?(type==='trapezoid'?2.0:1.8):1.0; // V2: trapezoid boss = 200% of normal trapezoid size
   const sizeScale=(game.mode==='endless'?1.35:1.0)*bossSizeMul*(opts.elite?1.1:1.0);
   const baseSpeedMult=1.2;
   let bossSpeedMult=opts.boss?(type==='trapezoid'?2.0:(type==='arrow'?0.72:(type==='circle'?2.5:1.6))):1.0;
@@ -1447,7 +1490,7 @@ function updateBullets(dt){
         const C=CLASSES[p.cls];
         const greenActive=(p.cls==='green'||game.upgrades.borrowedAbility==='green')&&p.dashT>0;
         if(greenActive){
-          if(p.dashHits&&!p.dashHits.has(e)){ const gd=CLASSES.green.dashDmg+game.upgrades.skillDamage; e.hp-=gd; game.stats.skillDamage+=gd; e.hitFlash=0.15; p.dashHits.add(e); spawnParticles(e.x,e.y,'#aaffaa',12,260); if(e.hp<=0){spawnParticles(e.x,e.y,hsl(e.hueA,80,70),20,220);Audio.noise(0.15,0.12);} }
+          if(p.dashHits&&!p.dashHits.has(e)){ const gd=CLASSES.green.dashDmg+game.upgrades.skillDamage*2; e.hp-=gd; game.stats.skillDamage+=gd; e.hitFlash=0.15; p.dashHits.add(e); spawnParticles(e.x,e.y,'#aaffaa',12,260); if(e.hp<=0){spawnParticles(e.x,e.y,hsl(e.hueA,80,70),20,220);Audio.noise(0.15,0.12);} }
           continue;
         }
         const borrowedRedActive=(p.cls!=='red'&&game.upgrades.borrowedAbility==='red'&&p.dashT>0);
@@ -1484,7 +1527,7 @@ function updateBullets(dt){
           break;
         }
         if(p.cls==='white'&&game.ability.active>0){
-          if((e.auraTimer||0)<=0){ e.hp-=C.touchDmg; e.hitFlash=0.12; e.auraTimer=C.touchTick; const hue=(performance.now()*0.5)%360; spawnParticles(e.x,e.y,hsl(hue,90,70),8,200); if(e.hp<=0){spawnParticles(e.x,e.y,hsl(e.hueA,80,70),20,220);Audio.noise(0.15,0.12);} }
+          if((e.auraTimer||0)<=0){ const td=C.touchDmg+game.upgrades.skillDamage*2; e.hp-=td; game.stats.skillDamage+=td; e.hitFlash=0.12; e.auraTimer=C.touchTick; const hue=(performance.now()*0.5)%360; spawnParticles(e.x,e.y,hsl(hue,90,70),8,200); if(e.hp<=0){spawnParticles(e.x,e.y,hsl(e.hueA,80,70),20,220);Audio.noise(0.15,0.12);} }
           continue;
         }
         damagePlayer(1);
@@ -1514,16 +1557,18 @@ function updateParticles(dt){
 // WAVES
 // ============================================================
 function buildFixedWave(n){
+  // V2: Intro walks players through every enemy type, one introduction per wave
   const q=[],add=(t,c)=>{for(let i=0;i<c;i++)q.push(t);};
-  if(n===1)add('circle',4); else if(n===2)add('circle',6);
-  else if(n===3){add('circle',4);add('triangle',2);}
-  else if(n===4){add('circle',5);add('triangle',3);}
-  else if(n===5){add('circle',4);add('triangle',2);add('arrow',3);}
-  else if(n===6){add('circle',5);add('triangle',3);add('arrow',3);}
-  else if(n===7){add('circle',3);add('triangle',2);add('arrow',2);add('hexagon',2);}
-  else if(n===8){add('circle',4);add('triangle',3);add('arrow',3);add('hexagon',2);}
-  else if(n===9){add('circle',3);add('triangle',3);add('arrow',3);add('hexagon',2);add('diamond',1);}
-  else if(n===10){add('circle',4);add('triangle',3);add('arrow',4);add('hexagon',2);add('diamond',2);}
+  if(n===1){ add('circle',4); }
+  else if(n===2){ add('circle',4); add('triangle',2); }                                     // introduce triangle
+  else if(n===3){ add('circle',3); add('triangle',2); add('arrow',3); }                     // introduce arrow
+  else if(n===4){ add('circle',2); add('triangle',2); add('arrow',2); add('hexagon',2); }   // introduce hexagon
+  else if(n===5){ add('circle',2); add('arrow',2); add('hexagon',1); add('diamond',2); }    // introduce diamond
+  else if(n===6){ add('circle',2); add('triangle',2); add('arrow',2); add('trapezoid',2); } // introduce trapezoid
+  else if(n===7){ q.push({type:'octagon',boss:true,skipSpawnAnim:true}); add('circle',3); } // introduce octagon (boss)
+  else if(n===8){ add('triangle',2); add('arrow',2); add('hexagon',2); add('diamond',2); add('trapezoid',1); } // sampler
+  else if(n===9){ add('circle',3); add('triangle',3); add('arrow',3); add('hexagon',2); add('diamond',2); add('trapezoid',2); } // full roster
+  else if(n===10){ q.push({type:'skull',boss:true,sharedBossPool:'intro_skull',sharedBossRole:0}); } // final Skull boss
   return q;
 }
 
@@ -1609,13 +1654,16 @@ function startWave(n){
       game.spawnQueue=[{type:'octagon',boss:true,skipSpawnAnim:true}, ...buildPointWave(6)];
       game.bossWavePendingReward=true;
     } else {
+      // V2: Intro waves 1-10 use the fixed teaching wave layout (takes priority over isBossWave)
       game.spawnQueue=(game.mode==='gauntlet')
         ?buildGauntletWave(n)
-        :(isBossWave(n)?buildBossWave(n):((game.mode==='intro'&&n<=10)?buildFixedWave(n):buildPointWave(n)));
-      game.bossWavePendingReward=(game.mode==='gauntlet')||isBossWave(n);
+        :((game.mode==='intro'&&n<=10)?buildFixedWave(n)
+          :(isBossWave(n)?buildBossWave(n):buildPointWave(n)));
+      const introHasBoss=(game.mode==='intro'&&(n===7||n===10));
+      game.bossWavePendingReward=(game.mode==='gauntlet')||isBossWave(n)||introHasBoss;
     }
-    // Also check skull warning for gauntlet skull round
-    if(game.mode==='gauntlet'&&game.gauntletRounds[n-1]==='skull'){
+    // Also check skull warning for gauntlet skull round + intro wave 10 final
+    if((game.mode==='gauntlet'&&game.gauntletRounds[n-1]==='skull')||(game.mode==='intro'&&n===10)){
       game.skullFinalPhase=true; game.skullWarnTimer=1.0; game.skullWarnCount=3;
       game.spawnQueue=[]; game.enemyBullets.length=0; game.enemies.length=0;
     }
@@ -1692,9 +1740,19 @@ function updateWave(dt){
       saveData.beatIntroWith.push(game.chosenClass); saveSave();
     }
 
+    // V2: Intro mode ends after wave 10
+    if(game.mode==='intro'&&game.wave>=10){
+      game.state='dead';
+      recordRunStats();
+      document.getElementById('goStats').innerHTML='INTRO COMPLETE<br>'+CLASS_INFO[game.chosenClass].name+'<br>Endless and Gauntlet are now available.';
+      document.getElementById('gameover').style.display='flex';
+      return;
+    }
+
     if(game.mode==='gauntlet'&&game.wave>=game.gauntletRounds.length){
       if(!saveData.beatGauntletOn.includes(game.difficulty)){ saveData.beatGauntletOn.push(game.difficulty); saveSave(); }
       game.state='dead';
+      recordRunStats();
       document.getElementById('goStats').innerHTML='BOSS GAUNTLET CLEARED<br>'+game.difficulty.toUpperCase()+'<br>Final round: <b>'+game.wave+'</b>';
       document.getElementById('gameover').style.display='flex';
       return;
@@ -1715,9 +1773,29 @@ function updateWave(dt){
 
 function gameOver(){
   game.state='dead';
+  recordRunStats();
   document.getElementById('goStats').innerHTML=game.mode.toUpperCase()+' MODE · '+game.difficulty.toUpperCase()+'<br>You reached wave <b>'+game.wave+'</b>.<br>Highest: <b>'+game.highest+'</b>';
   document.getElementById('gameover').style.display='flex';
   Audio.noise(0.8,0.4);
+}
+
+// V2: Memory Hall record keeping
+function recordRunStats(){
+  const cls=game.chosenClass; if(!cls) return;
+  const snap={
+    wave:game.wave, mode:game.mode, difficulty:game.difficulty,
+    time:Math.floor(game.runTime||0),
+    enemiesKilled:game.stats.enemiesKilled, bossesKilled:game.stats.bossesKilled,
+    bulletDamage:game.stats.bulletDamage, skillDamage:game.stats.skillDamage,
+    date:new Date().toISOString().slice(0,10),
+  };
+  const prior=saveData.classBestRuns[cls];
+  if(!prior || snap.wave>prior.wave){ saveData.classBestRuns[cls]=snap; }
+  if(game.mode==='endless'){
+    const pe=saveData.bestEndless;
+    if(!pe || snap.wave>pe.wave){ saveData.bestEndless={...snap, cls}; }
+  }
+  saveSave();
 }
 
 // ============================================================
@@ -2495,7 +2573,7 @@ function startGameWithClass(cls){
 
 // ---- TITLE / COMPENDIUM / OPTIONS ----
 function showMenuStep(which){
-  for(const id of ['titleStep','compendiumStep','optionsStep','modeStep','classStep','upgradesStep']){
+  for(const id of ['titleStep','compendiumStep','optionsStep','modeStep','classStep','upgradesStep','memoryHallStep']){
     const el=document.getElementById(id);
     if(el) el.style.display=(id===which)?'block':'none';
   }
@@ -2503,7 +2581,9 @@ function showMenuStep(which){
 
 document.getElementById('btnPlay').addEventListener('click',()=>showMenuStep('modeStep'));
 document.getElementById('btnCompendium').addEventListener('click',()=>{ renderCompendium('classes'); showMenuStep('compendiumStep'); });
+document.getElementById('btnMemoryHall').addEventListener('click',()=>{ renderMemoryHall(); showMenuStep('memoryHallStep'); });
 document.getElementById('btnOptions').addEventListener('click',()=>showMenuStep('optionsStep'));
+document.getElementById('backFromMemoryHall').addEventListener('click',()=>showMenuStep('titleStep'));
 document.getElementById('backFromCompendium').addEventListener('click',()=>showMenuStep('titleStep'));
 document.getElementById('backFromOptions').addEventListener('click',()=>showMenuStep('titleStep'));
 document.getElementById('backToTitle').addEventListener('click',()=>showMenuStep('titleStep'));
@@ -2600,6 +2680,57 @@ function enemyShapeSVGLocked(type){
   return enemyShapeSVG(type).replace(/fill="[^"]+"/g,'fill="#151515"').replace(/stroke="#fff"/g,'stroke="#333"');
 }
 
+// V2: Memory Hall
+function formatRunTime(secs){
+  const s=Math.max(0,secs|0), mm=String(Math.floor(s/60)).padStart(2,'0'), ss=String(s%60).padStart(2,'0');
+  return mm+':'+ss;
+}
+function renderRunStatsHTML(run, heading){
+  if(!run) return '<h4>'+heading+'</h4><div style="opacity:0.6;">No run recorded yet.</div>';
+  return '<h4>'+heading+'</h4>'
+    +'<div class="mh-row-stat"><b>Class</b><span>'+(run.cls?CLASS_INFO[run.cls].name:CLASS_INFO[game.chosenClass||'orange'].name)+'</span></div>'
+    +'<div class="mh-row-stat"><b>Wave</b><span>'+run.wave+'</span></div>'
+    +'<div class="mh-row-stat"><b>Mode</b><span>'+run.mode.toUpperCase()+'</span></div>'
+    +'<div class="mh-row-stat"><b>Difficulty</b><span>'+run.difficulty.toUpperCase()+'</span></div>'
+    +'<div class="mh-row-stat"><b>Run time</b><span>'+formatRunTime(run.time)+'</span></div>'
+    +'<div class="mh-row-stat"><b>Enemies defeated</b><span>'+(run.enemiesKilled||0)+'</span></div>'
+    +'<div class="mh-row-stat"><b>Bosses defeated</b><span>'+(run.bossesKilled||0)+'</span></div>'
+    +'<div class="mh-row-stat"><b>Bullet damage</b><span>'+(run.bulletDamage||0)+'</span></div>'
+    +'<div class="mh-row-stat"><b>Skill damage</b><span>'+(run.skillDamage||0)+'</span></div>'
+    +(run.date?'<div class="mh-row-stat"><b>Date</b><span>'+run.date+'</span></div>':'');
+}
+function renderMemoryHall(){
+  const be=saveData.bestEndless;
+  document.getElementById('mhBestNum').textContent=be?be.wave:'—';
+  document.getElementById('mhBestStats').innerHTML=renderRunStatsHTML(be,'BEST ENDLESS RUN');
+  document.getElementById('mhSelectedStats').innerHTML='<h4>SELECTED RUN</h4><div style="opacity:0.6;">Click a class tile below to view its best run.</div>';
+
+  const row1=document.getElementById('mhRow1');
+  const row2=document.getElementById('mhRow2');
+  row1.innerHTML=''; row2.innerHTML='';
+  const half=Math.ceil(CLASS_ORDER.length/2);
+  CLASS_ORDER.forEach((cls,i)=>{
+    const info=CLASS_INFO[cls];
+    const unlocked=isUnlocked(cls);
+    const run=saveData.classBestRuns[cls];
+    const tile=document.createElement('div');
+    tile.className='mh-tile'+(run?'':' empty');
+    tile.innerHTML=
+      '<div class="shape">'+classShapeSVG(cls,unlocked)+'</div>'
+      +'<div class="mh-name">'+(unlocked?info.name:'???')+'</div>'
+      +'<div class="mh-wave">'+(run?('WAVE '+run.wave):'— no run —')+'</div>'
+      +'<div class="mh-mode">'+(run?run.mode+' · '+run.difficulty:'')+'</div>';
+    tile.addEventListener('click',()=>{
+      document.querySelectorAll('.mh-tile').forEach(t=>t.classList.remove('selected'));
+      tile.classList.add('selected');
+      const label=(unlocked?info.name:'LOCKED')+' — BEST RUN';
+      if(run){ document.getElementById('mhSelectedStats').innerHTML=renderRunStatsHTML({...run,cls},label); }
+      else { document.getElementById('mhSelectedStats').innerHTML='<h4>'+label+'</h4><div style="opacity:0.6;">'+(unlocked?'No run recorded yet for this class.':'Unlock this class to start setting records.')+'</div>'; }
+    });
+    (i<half?row1:row2).appendChild(tile);
+  });
+}
+
 function enemyShapeSVG(type){
   const D=ENEMY_DEFS[type], hue=(D.color[0]+D.color[1])/2;
   const c=hsl(hue,70,55);
@@ -2643,6 +2774,25 @@ if(eliteToggle){
   eliteToggle.checked=!!saveData.options.eliteEnemies;
   eliteToggle.addEventListener('change',()=>{
     saveData.options.eliteEnemies=eliteToggle.checked;
+    saveSave();
+  });
+}
+
+// V2: Shoot mode + auto-aim wiring
+const shootModeEl=document.getElementById('shootMode');
+if(shootModeEl){
+  shootModeEl.value=saveData.options.shootMode||'hold';
+  shootModeEl.addEventListener('change',()=>{
+    saveData.options.shootMode=shootModeEl.value;
+    mouse.toggleFire=false;
+    saveSave();
+  });
+}
+const autoAimToggle=document.getElementById('autoAimToggle');
+if(autoAimToggle){
+  autoAimToggle.checked=!!saveData.options.autoAim;
+  autoAimToggle.addEventListener('change',()=>{
+    saveData.options.autoAim=autoAimToggle.checked;
     saveSave();
   });
 }
