@@ -14,9 +14,10 @@ const BLOCK_DURATION = 0.6;
 const ENEMY_BULLET_SPEED = 260;
 
 const DIFFICULTIES = {
-  easy:   { name: 'Easy (0.5x)',   regenInterval: 1, scale: 0.6  },
-  normal: { name: 'Normal (1.0x)', regenInterval: 5, scale: 1.0  },
+  easy:   { name: 'Easy (0.5x)',   regenInterval: 0, scale: 0.6  },
+  normal: { name: 'Normal (1.0x)', regenInterval: 0, scale: 1.0  },
   hard:   { name: 'Hard (1.5x)',   regenInterval: 0, scale: 1.5  },
+  insane: { name: 'Insane (2.0x)', regenInterval: 0, scale: 2.0  },
 };
 
 const CLASSES = {
@@ -40,6 +41,7 @@ const ENEMY_DEFS = {
   skull:    { hp:22, r:34, speed:102, cost:0, color:[0,0]     },
   trapezoid:{ hp:6,  r:20, speed:80,  cost:5, color:[210,10]  },
   octagon:  { hp:18, r:28, speed:90,  cost:0, color:[260,60]  },
+  healthpack:{ hp:1, r:18, speed:0,   cost:0, color:[120,120] },
 };
 
 const PRE_RUN_TIERS = {
@@ -201,6 +203,7 @@ const ENEMY_INFO = {
   hexagon:  { name:'HEXAGON',   cost:4, category:'Control',  desc:'Splitter. On death it splits into two smaller hexagons that still chase you. Kill them in clean spaces so you are not swamped.' },
   diamond:  { name:'DIAMOND',   cost:6, category:'Control',  desc:'Slow-moving turret. Fires steady bursts of bullets aimed at the player. Costs 6 points, so waves rarely stack more than a couple.' },
   trapezoid:{ name:'TRAPEZOID', cost:5, category:'Control',  desc:'Diagonal bouncer. Moves on 45-degree angles and ricochets off arena walls. In boss form two of them appear and coordinate phase patterns.' },
+  healthpack:{name:'HEALTH PACK', cost:'—', category:'Support', desc:'Forest-green cross, 1 HP, stationary. Chance to appear once per wave based on difficulty (Easy 80% / Normal 50% / Hard 25% / Insane 0%). Killing it heals you for 1 HP.' },
 };
 
 const BOSS_INFO = {
@@ -236,8 +239,8 @@ const BOSS_INFO = {
   },
   octagon:{
     name:'OCTAGON',        difficulty:'Hard',
-    desc:'Boss-only enemy. Spawns at the end of a wave and is completely immune to damage until it reaches the arena center. Once active it rotates and fires streams from all 8 points; rotation and fire rate increase sharply as its HP drops.',
-    tips:'Stay at the edges during the immune entry phase. As HP drops, the safe windows shrink — burst it down fast.',
+    desc:'Boss-only enemy that spawns in the center of the arena immediately at wave start. Rotates and fires bullet streams from all 8 points at once, starting 40% faster than before. Rotation and fire rate accelerate further as its HP drops.',
+    tips:'No more immune entry window — it is hot the moment the wave starts. Stay at the edges and find the rotating gaps between bullet streams.',
   },
   skull:{
     name:'SKULL',          difficulty:'Apex',
@@ -299,24 +302,57 @@ canvas.addEventListener('contextmenu', e=>e.preventDefault());
 // ============================================================
 const Audio = (()=>{
   let aCx=null, masterGain, layers={}, tension=0;
-  const BPM=118, STEP=60/BPM/4;
-  const ROOTS=[110.00,87.31,130.81,98.00];
+  // V2: song library — endless rotates between 3, gauntlet has its own dark/heavy track
+  const LEAD_HYPE=[
+    659.25,0,0,783.99,0,880,0,0,659.25,0,0,523.25,0,587.33,0,0,
+    698.46,0,880,0,1046.5,0,0,880,698.46,0,0,0,698.46,0,880,0,
+    784,0,0,1046.5,1318.51,0,1046.5,0,784,0,0,659.25,784,0,0,0,
+    987.77,0,784,0,587.33,0,784,0,987.77,0,1174.66,0,784,0,587.33,0,
+  ];
+  const LEAD_DRIVE=[
+    880,0,1046.5,0,1318.51,0,1046.5,0,880,0,784,0,659.25,0,587.33,0,
+    987.77,0,1174.66,0,1318.51,0,1567.98,0,1318.51,0,1174.66,0,880,0,987.77,0,
+    1046.5,0,880,0,1318.51,0,1567.98,0,1318.51,0,1046.5,0,880,0,659.25,0,
+    1174.66,0,987.77,0,880,0,1046.5,0,1318.51,0,1174.66,0,987.77,0,880,0,
+  ];
+  const LEAD_SYNTH=[
+    523.25,0,659.25,0,783.99,0,1046.5,0,783.99,0,659.25,0,523.25,0,659.25,0,
+    587.33,0,739.99,0,880,0,1174.66,0,880,0,739.99,0,587.33,0,739.99,0,
+    622.25,0,783.99,0,932.33,0,1244.51,0,932.33,0,783.99,0,622.25,0,783.99,0,
+    698.46,0,880,0,1046.5,0,1396.91,0,1046.5,0,880,0,698.46,0,880,0,
+  ];
+  const LEAD_DARK=[
+    164.81,0,0,0,196,0,0,0,174.61,0,0,0,155.56,0,0,0,
+    164.81,0,0,196,0,0,174.61,0,164.81,0,155.56,0,164.81,0,0,0,
+    174.61,0,0,0,207.65,0,0,0,196,0,0,0,174.61,0,0,0,
+    174.61,0,207.65,0,246.94,0,207.65,0,196,0,174.61,0,164.81,0,155.56,0,
+  ];
+  const SONGS={
+    endless1:{ bpm:118, roots:[110.00,87.31,130.81,98.00], lead:LEAD_HYPE,  thirdMap:[3,4,4,3] },
+    endless2:{ bpm:132, roots:[146.83,110.00,164.81,123.47], lead:LEAD_DRIVE, thirdMap:[4,3,4,3] },
+    endless3:{ bpm:128, roots:[87.31,130.81,98.00,116.54], lead:LEAD_SYNTH, thirdMap:[4,4,3,4] },
+    gauntlet:{ bpm:94,  roots:[82.41,69.30,77.78,61.74],   lead:LEAD_DARK,  thirdMap:[3,3,3,3] },
+    intro:   { bpm:118, roots:[110.00,87.31,130.81,98.00], lead:LEAD_HYPE,  thirdMap:[3,4,4,3] },
+  };
+  let currentSong=SONGS.endless1;
+  let STEP=60/currentSong.bpm/4;
+  function setSong(id){
+    if(!SONGS[id]) return;
+    if(SONGS[id]===currentSong) return;
+    currentSong=SONGS[id];
+    STEP=60/currentSong.bpm/4;
+    step=0;
+  }
   const KICK =[1,0,0,0,1,0,0,0,1,0,0,1,1,0,0,0];
   const SNARE=[0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0];
   const HAT  =[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,1];
   const OHAT =[0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0];
   const BASS_MULT=[1,0,0,1,0,1,1,0,1.5,0,0,1,0,2,0,1];
   function chordTones(i){
-    const r=ROOTS[i]*2;
-    const third=(i===0||i===3)?r*Math.pow(2,3/12):r*Math.pow(2,4/12);
+    const r=currentSong.roots[i]*2;
+    const third=r*Math.pow(2,currentSong.thirdMap[i]/12);
     return [r,third,r*Math.pow(2,7/12)];
   }
-  const LEAD=[
-    659.25,0,0,783.99,0,880,0,0,659.25,0,0,523.25,0,587.33,0,0,
-    698.46,0,880,0,1046.5,0,0,880,698.46,0,0,0,698.46,0,880,0,
-    784,0,0,1046.5,1318.51,0,1046.5,0,784,0,0,659.25,784,0,0,0,
-    987.77,0,784,0,587.33,0,784,0,987.77,0,1174.66,0,784,0,587.33,0,
-  ];
   function init(){
     if(aCx)return;
     aCx=new(window.AudioContext||window.webkitAudioContext)();
@@ -384,12 +420,12 @@ const Audio = (()=>{
     const now=aCx.currentTime;
     for(const k of Object.keys(layers)) layers[k].gain.gain.setTargetAtTime(layers[k].target,now,0.4);
     while(nextTime<now+0.25){
-      const beat=step%16,bar=Math.floor(step/16)%4,root=ROOTS[bar];
+      const beat=step%16,bar=Math.floor(step/16)%4,root=currentSong.roots[bar];
       if(KICK[beat])kickAt(nextTime); if(SNARE[beat])snareAt(nextTime);
       if(HAT[beat])hatAt(nextTime,false); if(OHAT[beat])hatAt(nextTime,true);
       const bm=BASS_MULT[beat]; if(bm)bassAt(nextTime,root*bm,STEP*1.6);
       if(beat===0)padAt(nextTime,chordTones(bar),STEP*16);
-      const leadF=LEAD[bar*16+beat]; if(leadF)leadAt(nextTime,leadF,STEP*1.8);
+      const leadF=currentSong.lead[bar*16+beat]; if(leadF)leadAt(nextTime,leadF,STEP*1.8);
       nextTime+=STEP; step++;
     }
     setTimeout(scheduler,40);
@@ -410,7 +446,7 @@ const Audio = (()=>{
   let storedVol=0.32;
   function setMasterVolume(v){ storedVol=v; if(masterGain) masterGain.gain.value=v; }
   function getStoredVolume(){ return storedVol; }
-  return{init,setLayers,setTension,blip,noise,setMasterVolume,getStoredVolume};
+  return{init,setLayers,setTension,blip,noise,setMasterVolume,getStoredVolume,setSong};
 })();
 
 // ============================================================
@@ -1110,8 +1146,8 @@ function updateDeathRings(dt){
 // ============================================================
 function spawnEnemy(type, opts={}){
   const D=ENEMY_DEFS[type]; if(!D) return;
-  // V2: Elite roll when toggle is on
-  if(saveData.options.eliteEnemies && !opts.boss && !opts.elite && type!=='skull' && type!=='octagon' && Math.random()<0.18){
+  // V2: Elite roll when toggle is on (never elite for healthpacks)
+  if(type!=='healthpack' && saveData.options.eliteEnemies && !opts.boss && !opts.elite && type!=='skull' && type!=='octagon' && Math.random()<0.18){
     opts=Object.assign({},opts,{elite:true});
   }
   const A=arenaRect();
@@ -1180,11 +1216,19 @@ function spawnEnemy(type, opts={}){
       e.sharedBossPool=poolId; e.sharedBossRole=role;
     }
   } else if(type==='octagon'){
-    // Octagon boss goes to center, immune until there
+    // V2: Octagon boss spawns directly at center, active, 40% faster initial rotation/fire
     const cx=A.x+A.w/2, cy=A.y+A.h/2;
     e.x=cx; e.y=cy; e.state='active'; e.stateT=0;
-    e.state2='moving_to_center'; e.immuneToHits=true;
-    e.fireT=1.5; e.safeRadius=0;
+    e.state2='active'; e.immuneToHits=false;
+    e.fireT=0.9; e.safeRadius=0;
+    e.fastStart=true; // used by AI to boost early rotation/fire speed
+  } else if(type==='healthpack'){
+    // V2: green health pack — stationary, no attacks, +1 HP on death
+    e.state='active'; e.stateT=0; e.speed=0; e.vx=0; e.vy=0;
+    e.isHealthPack=true;
+    // Keep spawn position near but inside the arena (reroll if too close to center)
+    e.x=clamp(x,A.x+30,A.x+A.w-30);
+    e.y=clamp(y,A.y+30,A.y+A.h-30);
   }
 
   game.enemies.push(e);
@@ -1193,20 +1237,22 @@ function spawnEnemy(type, opts={}){
 function updateEnemies(dt){
   const A=arenaRect(), p=game.player, ts=game.timeScale, ETA=dt*ts;
 
-  // Track boss kills + elite rewards + stats before filtering
+  // Track boss kills + elite rewards + stats + healthpack heal before filtering
   for(const e of game.enemies){
     if(e.hp<=0&&!e._killTracked){
       e._killTracked=true;
-      if(e.boss){
+      if(e.type==='healthpack'){
+        // V2: kill a health pack → +1 HP (capped at max)
+        if(p){ p.hp=Math.min(p.maxHp, p.hp+1); }
+        spawnParticles(e.x,e.y,'#2ea84a',24,220);
+        Audio.blip(660,0.2,'sine',0.18);
+        Audio.blip(880,0.25,'sine',0.14);
+      } else if(e.boss){
         const role=e.sharedBossRole||0;
         if(!e.sharedBossPool||role===0){ trackBossKill(e.type); game.stats.bossesKilled++; }
       } else {
         game.stats.enemiesKilled++;
-        if(e.elite){
-          const diffMul=game.difficulty==='easy'?1:game.difficulty==='normal'?1:1; // elites give flat bonus regardless
-          saveData.points += 1;
-          saveSave();
-        }
+        if(e.elite){ saveData.points += 1; saveSave(); }
       }
     }
   }
@@ -1222,6 +1268,7 @@ function updateEnemies(dt){
     }
     if(e.state==='spawn'){ e.stateT-=dt; const cx=A.x+A.w/2,cy=A.y+A.h/2,dx=cx-e.x,dy=cy-e.y,m=Math.hypot(dx,dy)||1; e.x+=(dx/m)*120*dt; e.y+=(dy/m)*120*dt; if(e.stateT<=0)e.state='active'; continue; }
     e.phase+=dt*2;
+    if(e.type==='healthpack'){ continue; } // V2: stationary, no AI
 
     switch(e.type){
       case 'circle':{
@@ -1315,7 +1362,8 @@ function updateEnemies(dt){
           else{ e.x+=(dx/d)*e.speed*1.5*ETA;e.y+=(dy/d)*e.speed*1.5*ETA; }
         } else {
           const hpFrac=e.hp/Math.max(1,e.maxHp);
-          const speedMult=hpFrac>0.5?1.0:hpFrac>0.25?1.4:2.0;
+          // V2: 40% faster baseline on top of the existing HP-based scaling
+          const speedMult=(hpFrac>0.5?1.0:hpFrac>0.25?1.4:2.0)*1.4;
           e.angle+=ETA*0.8*speedMult;
           e.fireT-=ETA;
           if(e.fireT<=0){ e.fireT=1.5/speedMult; for(let i=0;i<8;i++){const ang=e.angle+i*(Math.PI/4); game.enemyBullets.push({x:e.x+Math.cos(ang)*e.r,y:e.y+Math.sin(ang)*e.r,vx:Math.cos(ang)*(ENEMY_BULLET_SPEED*0.8),vy:Math.sin(ang)*(ENEMY_BULLET_SPEED*0.8),r:6,life:4.5,hue:260});} Audio.blip(520+Math.random()*60,0.06,'square',0.08); }
@@ -1507,7 +1555,7 @@ function buildGauntletWave(n){
   return [{type:roundType,boss:true},...adds];
 }
 
-function pickRandomEnemyType(){ const types=['circle','triangle','arrow','hexagon','diamond','trapezoid']; return types[Math.floor(Math.random()*types.length)]; }
+function pickRandomEnemyType(){ const types=['circle','triangle','arrow','hexagon','diamond','trapezoid','octagon']; return types[Math.floor(Math.random()*types.length)]; }
 
 function buildBossWave(n){
   const baseWave=(game.mode==='intro'&&n<=10)?buildFixedWave(n):buildPointWave(n);
@@ -1541,13 +1589,8 @@ function startWave(n){
   game.arenaScale=modeBase+Math.floor((n-1)/10)*0.1;
   game.enemySizeMult=game.mode==='endless'?1.35:1.0;
   const p=game.player;
+  // V2: Only wave 1 grants full HP. Mid-run healing comes exclusively from green health packs.
   if(n===1){ p.hp=p.maxHp; }
-  else if(game.mode==='gauntlet'){
-    if(game.difficulty==='normal') p.hp=p.maxHp;
-  } else {
-    const interval=game.difficultySettings?game.difficultySettings.regenInterval:1;
-    if(interval>0&&(n-1)%interval===0) p.hp=p.maxHp;
-  }
   p.iframes=0.6; game.enemyBullets.length=0;
   if(n===1) applyPreRunBonuses();
   if(n%4===1||n===1) game.bgPhase=(game.bgHue+rand(60,180))%360;
@@ -1560,12 +1603,10 @@ function startWave(n){
     Audio.setLayers(30); Audio.noise(0.35,0.18); Audio.blip(70,0.45,'sawtooth',0.22);
   } else {
     game.skullFinalPhase=false;
-    // Octagon pending spawn for gauntlet
+    // V2: Octagon now spawns at wave START everywhere — no pending-spawn warning phase
     game.octagonPendingSpawn=null;
     if(game.mode==='gauntlet'&&game.gauntletRounds[n-1]==='octagon'){
-      game.octagonPendingSpawn={boss:true,skipSpawnAnim:true};
-      game.octagonWarnTimer=2.5;
-      game.spawnQueue=buildPointWave(6);
+      game.spawnQueue=[{type:'octagon',boss:true,skipSpawnAnim:true}, ...buildPointWave(6)];
       game.bossWavePendingReward=true;
     } else {
       game.spawnQueue=(game.mode==='gauntlet')
@@ -1578,6 +1619,12 @@ function startWave(n){
       game.skullFinalPhase=true; game.skullWarnTimer=1.0; game.skullWarnCount=3;
       game.spawnQueue=[]; game.enemyBullets.length=0; game.enemies.length=0;
     }
+  }
+
+  // V2: Chance-based healthpack spawn (never in Insane, never on skull/octagon-dedicated waves)
+  if(game.difficulty!=='insane' && !isSkullPeriodicWave(n) && !(game.mode==='gauntlet'&&game.gauntletRounds[n-1]==='octagon')){
+    const packChance = game.difficulty==='easy'?0.80 : game.difficulty==='normal'?0.50 : 0.25;
+    if(Math.random()<packChance){ game.spawnQueue.unshift({type:'healthpack'}); }
   }
 
   game.spawnTimer=0.6; game.waveLive=false;
@@ -1841,6 +1888,22 @@ function drawEnemy(e){
       break;
     }
     case 'trapezoid': ctx.beginPath();ctx.moveTo(e.r*0.85,-e.r*0.7);ctx.lineTo(e.r*0.85,e.r*0.7);ctx.lineTo(-e.r*0.55,e.r*0.42);ctx.lineTo(-e.r*0.55,-e.r*0.42);ctx.closePath();ctx.fill();ctx.stroke(); break;
+    case 'healthpack': {
+      // V2: forest green cross (medical sign). Pulses gently
+      ctx.save();
+      const pulse=1+Math.sin(performance.now()*0.004)*0.06;
+      ctx.scale(pulse,pulse);
+      // outer frame
+      ctx.fillStyle='#f4f4f4'; ctx.strokeStyle='#2a7a38'; ctx.lineWidth=2; ctx.shadowColor='#2ea84a'; ctx.shadowBlur=16;
+      ctx.beginPath(); ctx.rect(-e.r*0.95,-e.r*0.95,e.r*1.9,e.r*1.9); ctx.fill(); ctx.stroke();
+      // green cross
+      ctx.fillStyle='#0e9938'; ctx.shadowBlur=10;
+      const armW=e.r*0.32, armL=e.r*0.75;
+      ctx.fillRect(-armW,-armL,armW*2,armL*2); // vertical
+      ctx.fillRect(-armL,-armW,armL*2,armW*2); // horizontal
+      ctx.restore();
+      break;
+    }
     case 'diamond':{
       ctx.beginPath();ctx.moveTo(0,-e.r);ctx.lineTo(e.r,0);ctx.lineTo(0,e.r);ctx.lineTo(-e.r,0);ctx.closePath();ctx.fill();ctx.stroke();
       ctx.fillStyle=hsl(secH,100,80);
@@ -2143,9 +2206,10 @@ const modeDescriptions = {
 };
 
 const difficultyDescriptions = {
-  easy:   'Easy (0.5x): full heal after every wave.',
-  normal: 'Normal (1.0x): full heal after every 5 waves.',
-  hard:   'Hard (1.5x): no healing between waves.',
+  easy:   'Easy (0.5x): 80% chance per wave to spawn a green health pack. Killing it restores 1 HP.',
+  normal: 'Normal (1.0x): 50% chance per wave to spawn a green health pack.',
+  hard:   'Hard (1.5x): 25% chance per wave to spawn a green health pack.',
+  insane: 'Insane (2.0x): Enemies at double power. No health packs spawn — the only way to survive is to not get hit.',
 };
 
 // ---- CLASS GRID ----
@@ -2344,8 +2408,7 @@ document.querySelectorAll('[data-mode]').forEach(btn=>{
         game.difficultySettings=DIFFICULTIES.normal;
         document.querySelectorAll('[data-difficulty]').forEach(b=>b.classList.toggle('active',b.getAttribute('data-difficulty')==='normal'));
       }
-      document.getElementById('difficultyDesc').textContent=
-        game.difficulty==='hard'?'Hard (1.5x): no healing between gauntlet rounds.':'Normal (1.0x): full heal between gauntlet rounds.';
+      document.getElementById('difficultyDesc').textContent=difficultyDescriptions[game.difficulty];
     } else {
       easyBtn.style.display='';
       document.getElementById('difficultyDesc').textContent=difficultyDescriptions[game.difficulty];
@@ -2360,8 +2423,7 @@ document.querySelectorAll('[data-difficulty]').forEach(btn=>{
     game.difficultySettings=DIFFICULTIES[game.difficulty];
     document.querySelectorAll('[data-difficulty]').forEach(b=>b.classList.toggle('active',b===btn));
     if(game.mode==='gauntlet'){
-      document.getElementById('difficultyDesc').textContent=
-        game.difficulty==='hard'?'Hard (1.5x): no healing between gauntlet rounds.':'Normal (1.0x): full heal between gauntlet rounds.';
+      document.getElementById('difficultyDesc').textContent=difficultyDescriptions[game.difficulty];
     } else {
       document.getElementById('difficultyDesc').textContent=difficultyDescriptions[game.difficulty];
     }
@@ -2382,6 +2444,12 @@ document.getElementById('backToMode').addEventListener('click',()=>{
 // ---- START GAME ----
 function startGameWithClass(cls){
   Audio.init();
+  // V2: Select soundtrack per mode
+  if(game.mode==='gauntlet') Audio.setSong('gauntlet');
+  else if(game.mode==='endless'){
+    const pool=['endless1','endless2','endless3'];
+    Audio.setSong(pool[Math.floor(Math.random()*pool.length)]);
+  } else Audio.setSong('intro');
   game.chosenClass=cls;
   game.player=makePlayer(cls);
   game.upgrades={ hp:0,damage:0,shots:0,skillCooldown:0,blockCooldown:0,skillDamage:0,moveSpeed:0,blueBallSize:0,octaDuration:0,revive:0,pierce:false,bounce:false,betterBoons:false,borrowedAbility:null };
@@ -2543,6 +2611,7 @@ function enemyShapeSVG(type){
     case 'diamond':  return '<svg width="48" height="48" viewBox="0 0 48 48"><polygon points="24,4 42,24 24,44 6,24" fill="'+c+'" stroke="#fff" stroke-width="1.5"/></svg>';
     case 'trapezoid':return '<svg width="48" height="48" viewBox="0 0 48 48"><polygon points="14,10 34,10 42,38 6,38" fill="'+c+'" stroke="#fff" stroke-width="1.5"/></svg>';
     case 'octagon':  return '<svg width="48" height="48" viewBox="0 0 48 48"><polygon points="24,4 38,10 44,24 38,38 24,44 10,38 4,24 10,10" fill="'+c+'" stroke="#fff" stroke-width="1.5"/></svg>';
+    case 'healthpack': return '<svg width="48" height="48" viewBox="0 0 48 48"><rect x="7" y="7" width="34" height="34" fill="#f4f4f4" stroke="#2a7a38" stroke-width="2"/><rect x="19" y="11" width="10" height="26" fill="#0e9938"/><rect x="11" y="19" width="26" height="10" fill="#0e9938"/></svg>';
     case 'skull':    return classShapeSVG('black',true);
   }
   return '';
