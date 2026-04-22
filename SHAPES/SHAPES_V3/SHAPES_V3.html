@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SHAPES · V3</title>
+<link rel="stylesheet" href="SHAPES_V3.css" />
+</head>
+<body>
+
+<div id="wrap"><canvas id="c"></canvas></div>
+<div class="wave-banner" id="waveBanner"></div>
+
+<div id="menu">
+  <div class="title">SHAPES</div>
+  <div class="subtitle">YOU DON'T OVERPOWER THE CHAOS — YOU SURVIVE IT</div>
+
+  <div id="titleStep">
+    <div class="title-buttons">
+      <button class="title-btn" id="btnPlay">PLAY</button>
+      <button class="title-btn" id="btnCompendium">COMPENDIUM</button>
+      <button class="title-btn" id="btnMemoryHall">MEMORY HALL</button>
+      <button class="title-btn" id="btnOptions">OPTIONS</button>
+    </div>
+    <div id="adminHint">admin…</div>
+    <div id="adminBox" style="display:none;">
+      <input type="password" id="adminCode" placeholder="code" autocomplete="off" />
+      <button id="adminSubmit">ENTER</button>
+      <div id="adminStatus"></div>
+    </div>
+  </div>
+
+  <div id="memoryHallStep" style="display:none;">
+    <div class="menu-step">MEMORY HALL</div>
+    <div class="mh-top">
+      <div class="mh-panel mh-best-stats" id="mhBestStats">No endless run recorded yet.</div>
+      <div class="mh-best-wave" id="mhBestWave">
+        <div class="mh-label">BEST ENDLESS WAVE</div>
+        <div class="mh-num" id="mhBestNum">—</div>
+      </div>
+      <div class="mh-panel mh-selected-stats" id="mhSelectedStats">Click a class below to view its best run.</div>
+    </div>
+    <div class="mh-rows">
+      <div class="mh-row" id="mhRow1"></div>
+      <div class="mh-row" id="mhRow2"></div>
+    </div>
+    <button class="menu-back" id="backFromMemoryHall">BACK</button>
+  </div>
+
+  <div id="compendiumStep" style="display:none;">
+    <div class="menu-step">COMPENDIUM</div>
+    <div class="compendium-tabs">
+      <button class="comp-tab active" data-comp="classes">CLASSES</button>
+      <button class="comp-tab" data-comp="enemies">ENEMIES</button>
+      <button class="comp-tab" data-comp="bosses">BOSSES</button>
+    </div>
+    <div id="compendiumContent"></div>
+    <button class="menu-back" id="backFromCompendium">BACK</button>
+  </div>
+
+  <div id="optionsStep" style="display:none;">
+    <div class="menu-step">OPTIONS</div>
+    <div class="options-list">
+      <div class="option-row">
+        <label for="masterVol">Master Volume</label>
+        <input type="range" id="masterVol" min="0" max="100" value="32">
+        <span id="masterVolVal">32%</span>
+      </div>
+      <div class="option-row option-row-check">
+        <label for="eliteToggle">Elite Enemies (overcrowd relief)</label>
+        <input type="checkbox" id="eliteToggle">
+      </div>
+      <div class="option-desc">When enabled, some enemies in each wave become stronger (more HP &amp; speed) but award extra points on death. Helps combat overcrowding at higher waves.</div>
+      <div class="option-row">
+        <label for="shootMode">Shooting</label>
+        <select id="shootMode">
+          <option value="hold">Hold to shoot</option>
+          <option value="toggle">Toggle (click once on/off)</option>
+        </select>
+      </div>
+      <div class="option-row option-row-check">
+        <label for="autoAimToggle">Auto-aim at nearest enemy</label>
+        <input type="checkbox" id="autoAimToggle">
+      </div>
+      <div class="option-desc">Auto-aim overrides your mouse direction for shooting and abilities, pointing at the closest enemy.</div>
+      <button class="option-danger" id="resetSaveBtn">RESET SAVE DATA</button>
+    </div>
+    <button class="menu-back" id="backFromOptions">BACK</button>
+  </div>
+
+  <div id="modeStep" style="display:none;">
+    <div class="menu-step">1. Choose a mode</div>
+    <div class="mode-select">
+      <button class="mode-btn active" data-mode="intro">INTRO MODE</button>
+      <button class="mode-btn" data-mode="endless" id="endlessBtn">ENDLESS MODE</button>
+      <button class="mode-btn" data-mode="gauntlet">BOSS GAUNTLET</button>
+    </div>
+    <div class="mode-desc" id="modeDesc">Intro Mode: fixed teaching waves 1–10, then ramps into the point system.</div>
+
+    <div class="menu-step" style="margin-top:10px;">2. Choose a difficulty</div>
+    <div class="mode-select">
+      <button class="mode-btn active" data-difficulty="easy">EASY (0.5x)</button>
+      <button class="mode-btn" data-difficulty="normal">NORMAL (1.0x)</button>
+      <button class="mode-btn" data-difficulty="hard">HARD (1.5x)</button>
+      <button class="mode-btn" data-difficulty="insane">INSANE (2.0x)</button>
+    </div>
+    <div class="mode-desc" id="difficultyDesc">Easy (0.5x): 80% chance per wave to spawn a green health pack. Killing it restores 1 HP.</div>
+
+    <button class="menu-back" id="continueToClass">CONTINUE TO CLASS SELECT</button>
+    <button class="menu-back" id="backToTitle">BACK TO TITLE</button>
+  </div>
+
+  <div id="classStep" style="display:none;">
+    <div class="menu-step">3. Choose your class</div>
+    <div class="class-select-layout">
+      <div class="classes" id="classGrid"></div>
+      <div class="class-preview-col">
+        <div class="class-preview" id="classPreview">
+          <div class="preview-shape" id="previewShape"></div>
+          <div class="preview-name" id="previewName">CLASS</div>
+          <div class="preview-desc" id="previewDesc">Hover or click a class to preview.</div>
+        </div>
+        <button id="openUpgradesBtn" class="upgrades-btn-standalone">UPGRADES (<span id="upgradesPointsLabel">0</span> pt)</button>
+      </div>
+    </div>
+    <button class="menu-back" id="backToMode">BACK TO MODE SELECT</button>
+  </div>
+
+  <div id="upgradesStep" style="display:none;">
+    <div class="menu-step">PRE-RUN UPGRADES</div>
+    <div class="shop-header">Points available: <span id="shopPoints">0</span></div>
+    <div class="shop-hint">Click an owned tier to toggle it on/off for this run (saves are shared).</div>
+    <div id="shopLines"></div>
+    <button class="menu-back" id="backFromUpgrades">BACK TO CLASS SELECT</button>
+  </div>
+
+  <div class="hint">WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · RIGHT CLICK ABILITY · SPACE BLOCK</div>
+</div>
+
+<div id="infoModal" style="display:none;">
+  <div class="info-modal-box">
+    <div class="info-modal-title" id="infoModalTitle"></div>
+    <div class="info-modal-body" id="infoModalBody"></div>
+    <button id="infoModalClose">CLOSE</button>
+  </div>
+</div>
+
+<div id="boonMenu">
+  <div class="boon-wrap">
+    <div class="title">CHOOSE A BOON</div>
+    <div class="subtitle">Wave cleared. Pick one upgrade and keep going.</div>
+    <div class="boon-grid" id="boonGrid"></div>
+  </div>
+</div>
+
+<div id="pauseOverlay" style="display:none;">
+  <div class="pause-title">PAUSED</div>
+  <div class="pause-sub">ESC / P to resume</div>
+  <div class="pause-panels">
+    <div class="pause-panel">
+      <h3>UPGRADES</h3>
+      <div id="pauseUpgrades"></div>
+    </div>
+    <div class="pause-panel">
+      <h3>SETTINGS</h3>
+      <div class="option-row">
+        <label for="pauseVol">Volume</label>
+        <input type="range" id="pauseVol" min="0" max="100" value="32">
+        <span id="pauseVolVal">32%</span>
+      </div>
+      <button class="pause-btn" id="pauseResume">RESUME</button>
+      <button class="pause-btn" id="pauseRestart">RESTART RUN</button>
+      <button class="pause-btn pause-btn-danger" id="pauseForfeit">FORFEIT (TO MENU)</button>
+    </div>
+    <div class="pause-panel">
+      <h3>STATS</h3>
+      <div id="pauseStats"></div>
+    </div>
+  </div>
+</div>
+
+<div id="gameover">
+  <h2>SURVIVAL ENDED</h2>
+  <div class="stats" id="goStats"></div>
+  <button onclick="location.reload()">TRY AGAIN</button>
+</div>
+
+<script src="SHAPES_V3.js"></script>
+</body>
+</html>
