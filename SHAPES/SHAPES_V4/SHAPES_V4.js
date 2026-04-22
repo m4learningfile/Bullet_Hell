@@ -47,19 +47,19 @@ const ENEMY_DEFS = {
 };
 
 const PRE_RUN_TIERS = {
-  damage:        { label:'Bullet Damage',  values:[0,1,2,3,4,5],                  costs:[0,1,3,6,10,20] },
-  skillDamage:   { label:'Skill Damage',   values:[0,3,6,9,12,15],                costs:[0,1,3,6,10,20] },
-  hp:            { label:'Health',         values:[0,1,2,3,4,5],                  costs:[0,1,3,6,10,20] },
-  skillCooldown: { label:'Skill Cooldown', values:[0,0.05,0.10,0.15,0.20,0.25],   costs:[0,1,3,6,10,20] },
-  moveSpeed:     { label:'Move Speed',     values:[0,0.05,0.10,0.15,0.20,0.25],   costs:[0,1,3,6,10,20] },
-  blockCooldown: { label:'Block Cooldown', values:[0,0.05,0.10,0.15,0.20,0.25],   costs:[0,1,3,6,10,20] },
-  shots:         { label:'Extra Bullet Stream', values:[0,1,2,3],                 costs:[0,5,15,25] },
+  damage:        { label:'Bullet Damage',  values:[0,1,2,3,4,5],                  costs:[0,1,3,6,10,20], desc:'+1 bullet damage per tier.' },
+  skillDamage:   { label:'Skill Damage',   values:[0,3,6,9,12,15],                costs:[0,1,3,6,10,20], desc:'+3 skill damage per tier (Circle scales 3x, Skull scales 5x).' },
+  hp:            { label:'Health',         values:[0,1,2,3,4,5],                  costs:[0,1,3,6,10,20], desc:'+1 max HP per tier.' },
+  skillCooldown: { label:'Skill Cooldown', values:[0,0.05,0.10,0.15,0.20,0.25],   costs:[0,1,3,6,10,20], desc:'5% lower skill cooldown per tier.' },
+  moveSpeed:     { label:'Move Speed',     values:[0,0.05,0.10,0.15,0.20,0.25],   costs:[0,1,3,6,10,20], desc:'5% more movement speed per tier.' },
+  blockCooldown: { label:'Block Cooldown', values:[0,0.05,0.10,0.15,0.20,0.25],   costs:[0,1,3,6,10,20], desc:'5% lower block cooldown per tier.' },
+  shots:         { label:'Extra Bullet Stream', values:[0,1,2,3],                 costs:[0,5,15,25], desc:'+1 additional bullet stream per tier.' },
 };
 
 // ============================================================
 // SAVE SYSTEM
 // ============================================================
-const SAVE_KEY = 'shapes_v3_save';
+const SAVE_KEY = 'shapes_v4_save';
 function defaultSave() {
   return {
     points: 0,
@@ -197,7 +197,7 @@ const CLASS_INFO = {
     skillDescription:'For 10 seconds your bullets transform into indigo crescents: piercing boomerangs that fly out to your cursor position and return, hitting enemies twice per shot. After the form ends, the cooldown begins normally and can be reduced by Skill Cooldown boons.',
     quirks:'Crescent boomerangs deal 2× Bullet Damage and do not gain bonus damage from Skill Damage. Their base movement speed is reduced by 20%, while Skill Damage boons now make the boomerangs travel faster.',
     skillBrief:'Crescent Form: Bullets become piercing boomerangs for 10s.',
-    previewLong:'Boomerang specialist. While Crescent Form is active (10 seconds), every bullet you fire becomes a piercing indigo crescent that flies to your cursor and returns, damaging enemies twice. Skill Cooldown lowers the form's cooldown normally, while Skill Damage speeds the boomerangs up. Crescent damage scales only from Bullet Damage.',
+    previewLong:'Boomerang specialist. While Crescent Form is active (10 seconds), every bullet you fire becomes a piercing indigo crescent that flies to your cursor and returns, damaging enemies twice. Skill Cooldown lowers the form\'s cooldown normally, while Skill Damage speeds the boomerangs up. Crescent damage scales only from Bullet Damage.',
     unlockHint:'Always available.',
   },
 };
@@ -517,6 +517,7 @@ function arenaRect(){
   const aw=Math.min(w,maxW), ah=Math.min(h,maxH);
   return{ x:(BASE_W-aw)/2, y:(BASE_H-ah)/2, w:aw, h:ah };
 }
+function playerRadius(p){ return (p && p.radius) || PLAYER_RADIUS; }
 
 // ============================================================
 // RARITY / BOON SYSTEM
@@ -806,6 +807,7 @@ function makePlayer(cls){
   const C=CLASSES[cls];
   return{ x:BASE_W/2, y:BASE_H/2, vx:0, vy:0,
     cls, color:C.color,
+    radius: cls==='red' ? ENEMY_DEFS.trapezoid.r : PLAYER_RADIUS,
     hp:C.hp, maxHp:C.hp,
     iframes:0, fireCd:0,
     dashVx:0, dashVy:0, dashT:0,
@@ -905,7 +907,7 @@ function updatePlayer(dt){
     if(p.octaFireCd<=0){
       for(let i=0;i<8;i++){
         const ang=p.angle+i*(Math.PI/4);
-        game.playerBullets.push({ x:p.x+Math.cos(ang)*(PLAYER_RADIUS+4), y:p.y+Math.sin(ang)*(PLAYER_RADIUS+4), vx:Math.cos(ang)*PLAYER_BULLET_SPEED, vy:Math.sin(ang)*PLAYER_BULLET_SPEED, life:1.2, bouncesLeft:game.upgrades.bounce?1:0 });
+        game.playerBullets.push({ x:p.x+Math.cos(ang)*(playerRadius(p)+4), y:p.y+Math.sin(ang)*(playerRadius(p)+4), vx:Math.cos(ang)*PLAYER_BULLET_SPEED, vy:Math.sin(ang)*PLAYER_BULLET_SPEED, life:1.2, bouncesLeft:game.upgrades.bounce?1:0 });
       }
       p.octaFireCd=CLASSES.purple.burstRate;
       Audio.blip(760+Math.random()*120,0.04,'square',0.07);
@@ -922,7 +924,7 @@ function updatePlayer(dt){
     if(bcls==='purple'&&game.borrowed.active>0){
       p.octaFireCdB=(p.octaFireCdB||0)-dt;
       if(p.octaFireCdB<=0){
-        for(let i=0;i<8;i++){ const ang=p.angle+i*(Math.PI/4); game.playerBullets.push({ x:p.x+Math.cos(ang)*(PLAYER_RADIUS+4),y:p.y+Math.sin(ang)*(PLAYER_RADIUS+4),vx:Math.cos(ang)*PLAYER_BULLET_SPEED,vy:Math.sin(ang)*PLAYER_BULLET_SPEED,life:1.2,bouncesLeft:game.upgrades.bounce?1:0 }); }
+        for(let i=0;i<8;i++){ const ang=p.angle+i*(Math.PI/4); game.playerBullets.push({ x:p.x+Math.cos(ang)*(playerRadius(p)+4),y:p.y+Math.sin(ang)*(playerRadius(p)+4),vx:Math.cos(ang)*PLAYER_BULLET_SPEED,vy:Math.sin(ang)*PLAYER_BULLET_SPEED,life:1.2,bouncesLeft:game.upgrades.bounce?1:0 }); }
         p.octaFireCdB=CLASSES.purple.burstRate;
       }
     }
@@ -959,10 +961,10 @@ function updatePlayer(dt){
 
   // Arena edge bounce — ALWAYS damages the player, bypassing iframes and block
   let edgeBounced=false;
-  if(p.x<A.x+PLAYER_RADIUS){ p.x=A.x+PLAYER_RADIUS; if(p.dashT>0){p.dashVx=Math.abs(p.dashVx);}else{p.knockVx=Math.max(p.knockVx||0,380);} edgeBounced=true; }
-  if(p.x>A.x+A.w-PLAYER_RADIUS){ p.x=A.x+A.w-PLAYER_RADIUS; if(p.dashT>0){p.dashVx=-Math.abs(p.dashVx);}else{p.knockVx=Math.min(p.knockVx||0,-380);} edgeBounced=true; }
-  if(p.y<A.y+PLAYER_RADIUS){ p.y=A.y+PLAYER_RADIUS; if(p.dashT>0){p.dashVy=Math.abs(p.dashVy);}else{p.knockVy=Math.max(p.knockVy||0,380);} edgeBounced=true; }
-  if(p.y>A.y+A.h-PLAYER_RADIUS){ p.y=A.y+A.h-PLAYER_RADIUS; if(p.dashT>0){p.dashVy=-Math.abs(p.dashVy);}else{p.knockVy=Math.min(p.knockVy||0,-380);} edgeBounced=true; }
+  if(p.x<A.x+playerRadius(p)){ p.x=A.x+playerRadius(p); if(p.dashT>0){p.dashVx=Math.abs(p.dashVx);}else{p.knockVx=Math.max(p.knockVx||0,380);} edgeBounced=true; }
+  if(p.x>A.x+A.w-playerRadius(p)){ p.x=A.x+A.w-playerRadius(p); if(p.dashT>0){p.dashVx=-Math.abs(p.dashVx);}else{p.knockVx=Math.min(p.knockVx||0,-380);} edgeBounced=true; }
+  if(p.y<A.y+playerRadius(p)){ p.y=A.y+playerRadius(p); if(p.dashT>0){p.dashVy=Math.abs(p.dashVy);}else{p.knockVy=Math.max(p.knockVy||0,380);} edgeBounced=true; }
+  if(p.y>A.y+A.h-playerRadius(p)){ p.y=A.y+A.h-playerRadius(p); if(p.dashT>0){p.dashVy=-Math.abs(p.dashVy);}else{p.knockVy=Math.min(p.knockVy||0,-380);} edgeBounced=true; }
   if(p.edgeHitCd>0) p.edgeHitCd-=dt;
   const starInvuln=(p.cls==='white'&&game.ability.active>0);
   if(edgeBounced){
@@ -1021,7 +1023,7 @@ function updatePlayer(dt){
       for(let i=0;i<totalShots;i++){
         const ang=p.angle+(i-half)*spreadStep;
         game.playerBullets.push({
-          x:p.x+Math.cos(ang)*PLAYER_RADIUS, y:p.y+Math.sin(ang)*PLAYER_RADIUS,
+          x:p.x+Math.cos(ang)*playerRadius(p), y:p.y+Math.sin(ang)*playerRadius(p),
           vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd,
           life:4.0, crescent:true, crescentSpd:spd, dmg,
           maxTravel:m, travelled:0, returning:false, pierced:new WeakSet(),
@@ -1033,7 +1035,7 @@ function updatePlayer(dt){
     } else {
       for(let i=0;i<totalShots;i++){
         const ang=p.angle+(i-half)*spreadStep;
-        game.playerBullets.push({ x:p.x+Math.cos(ang)*PLAYER_RADIUS, y:p.y+Math.sin(ang)*PLAYER_RADIUS, vx:Math.cos(ang)*PLAYER_BULLET_SPEED, vy:Math.sin(ang)*PLAYER_BULLET_SPEED, life:bulletLife, bouncesLeft:game.upgrades.bounce?1:0 });
+        game.playerBullets.push({ x:p.x+Math.cos(ang)*playerRadius(p), y:p.y+Math.sin(ang)*playerRadius(p), vx:Math.cos(ang)*PLAYER_BULLET_SPEED, vy:Math.sin(ang)*PLAYER_BULLET_SPEED, life:bulletLife, bouncesLeft:game.upgrades.bounce?1:0 });
       }
       p.fireCd=1/PLAYER_FIRE_RATE;
       Audio.blip(880+Math.random()*80,0.05,'square',0.08);
@@ -1093,7 +1095,7 @@ function useAbility(){
     if(game.ability.t>0) return;
     const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
     const radius=C.ballRadius+game.upgrades.blueBallSize*5;
-    game.playerBullets.push({ x:p.x+(dx/m)*(PLAYER_RADIUS+4),y:p.y+(dy/m)*(PLAYER_RADIUS+4),vx:(dx/m)*C.ballSpeed,vy:(dy/m)*C.ballSpeed,life:6,bigBall:true,r:radius,dmg:C.ballDmg+currentSkillDamageBonus('blue'),pierced:new WeakSet() });
+    game.playerBullets.push({ x:p.x+(dx/m)*(playerRadius(p)+4),y:p.y+(dy/m)*(playerRadius(p)+4),vx:(dx/m)*C.ballSpeed,vy:(dy/m)*C.ballSpeed,life:6,bigBall:true,r:radius,dmg:C.ballDmg+currentSkillDamageBonus('blue'),pierced:new WeakSet() });
     game.ability.t=effectiveAbilityCooldown(p.cls);
     Audio.blip(320,0.18,'sine',0.16);
   } else if(p.cls==='purple'){
@@ -1134,7 +1136,7 @@ function useAbility(){
       Math.hypot(p.x-A.x,       p.y-(A.y+A.h)),
       Math.hypot(p.x-(A.x+A.w), p.y-(A.y+A.h))
     );
-    game.deathRings.push({ x:p.x, y:p.y, r:PLAYER_RADIUS+6, maxR:cornerDist+40, speed:520, dmg, hits:new Set() });
+    game.deathRings.push({ x:p.x, y:p.y, r:playerRadius(p)+6, maxR:cornerDist+40, speed:520, dmg, hits:new Set() });
     game.ability.t=effectiveAbilityCooldown('black');
     Audio.noise(0.6,0.35); Audio.blip(80,0.5,'sawtooth',0.28);
   } else if(p.cls==='kite'){
@@ -1174,7 +1176,7 @@ function useBorrowedAbility(){
     if(B.t>0)return; // weakened: 15s cooldown instead of 10s (via BORROWED_COOLDOWNS)
     const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
     const radius=C.ballRadius+game.upgrades.blueBallSize*5;
-    game.playerBullets.push({ x:p.x+(dx/m)*(PLAYER_RADIUS+4),y:p.y+(dy/m)*(PLAYER_RADIUS+4),vx:(dx/m)*C.ballSpeed,vy:(dy/m)*C.ballSpeed,life:6,bigBall:true,r:radius,dmg:C.ballDmg+currentSkillDamageBonus('blue'),pierced:new WeakSet() });
+    game.playerBullets.push({ x:p.x+(dx/m)*(playerRadius(p)+4),y:p.y+(dy/m)*(playerRadius(p)+4),vx:(dx/m)*C.ballSpeed,vy:(dy/m)*C.ballSpeed,life:6,bigBall:true,r:radius,dmg:C.ballDmg+currentSkillDamageBonus('blue'),pierced:new WeakSet() });
     B.t=cd;
   } else if(bcls==='purple'){
     if(B.t>0)return;
@@ -1214,7 +1216,7 @@ function useBorrowedAbility(){
       Math.hypot(p.x-A.x,       p.y-(A.y+A.h)),
       Math.hypot(p.x-(A.x+A.w), p.y-(A.y+A.h))
     );
-    game.deathRings.push({ x:p.x, y:p.y, r:PLAYER_RADIUS+6, maxR:cornerDist+40, speed:520, dmg, hits:new Set() });
+    game.deathRings.push({ x:p.x, y:p.y, r:playerRadius(p)+6, maxR:cornerDist+40, speed:520, dmg, hits:new Set() });
     B.t=cd;
     Audio.noise(0.6,0.35); Audio.blip(80,0.5,'sawtooth',0.28);
   }
@@ -1566,7 +1568,7 @@ function updateBullets(dt){
         const dx=p.x-b.x, dy=p.y-b.y, m=Math.hypot(dx,dy)||1;
         b.vx=(dx/m)*b.crescentSpd; b.vy=(dy/m)*b.crescentSpd;
         b.x+=b.vx*dt; b.y+=b.vy*dt;
-        if(m<PLAYER_RADIUS+8) b.life=0; // caught
+        if(m<playerRadius(p)+8) b.life=0; // caught
       } else { b.life=0; }
       b.life-=dt;
     } else {
@@ -1616,7 +1618,7 @@ function updateBullets(dt){
     b.x+=b.vx*ETA; b.y+=b.vy*ETA; b.life-=dt;
     if(b.x<A.x||b.x>A.x+A.w||b.y<A.y||b.y>A.y+A.h) b.life=0;
     const p=game.player;
-    if(p){ const rr=b.r+PLAYER_RADIUS; if(dist2(b.x,b.y,p.x,p.y)<rr*rr){ damagePlayer(1); spawnParticles(b.x,b.y,'#fff',8,180); b.life=0; } }
+    if(p){ const rr=b.r+playerRadius(p); if(dist2(b.x,b.y,p.x,p.y)<rr*rr){ damagePlayer(1); spawnParticles(b.x,b.y,'#fff',8,180); b.life=0; } }
   }
   game.enemyBullets=game.enemyBullets.filter(b=>b.life>0);
 
@@ -1626,7 +1628,7 @@ function updateBullets(dt){
     for(const e of game.enemies){
       if(e.state==='spawn') continue;
       if(e.auraTimer>0) e.auraTimer-=dt;
-      const rr=e.r+PLAYER_RADIUS-2;
+      const rr=e.r+playerRadius(p)-2;
       if(dist2(p.x,p.y,e.x,e.y)<rr*rr){
         const C=CLASSES[p.cls];
         const greenActive=(p.cls==='green'||game.upgrades.borrowedAbility==='green')&&p.dashT>0;
@@ -1991,7 +1993,7 @@ function drawPlayer(){
   if(p.cls==='crescent' && p.crescentActive>0){
     ctx.save();
     ctx.strokeStyle=CLASSES.crescent.color; ctx.shadowColor=CLASSES.crescent.color; ctx.shadowBlur=22; ctx.lineWidth=3;
-    const r=PLAYER_RADIUS+10+Math.sin(performance.now()*0.01)*2;
+    const r=playerRadius(p)+10+Math.sin(performance.now()*0.01)*2;
     ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.stroke();
     ctx.restore();
   }
@@ -1999,16 +2001,16 @@ function drawPlayer(){
   if(p.cls==='white'&&game.ability.active>0){
     const hue=(performance.now()*0.5)%360;
     ctx.save(); ctx.shadowColor=hsl(hue,90,65); ctx.shadowBlur=30;
-    ctx.strokeStyle=hsl(hue,90,70); ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x,p.y,PLAYER_RADIUS+12,0,Math.PI*2); ctx.stroke();
-    ctx.strokeStyle=hsl((hue+120)%360,90,70); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,PLAYER_RADIUS+6,0,Math.PI*2); ctx.stroke(); ctx.restore();
+    ctx.strokeStyle=hsl(hue,90,70); ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x,p.y,playerRadius(p)+12,0,Math.PI*2); ctx.stroke();
+    ctx.strokeStyle=hsl((hue+120)%360,90,70); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,playerRadius(p)+6,0,Math.PI*2); ctx.stroke(); ctx.restore();
   }
   if(p.cls==='purple'&&game.ability.active>0){
     ctx.save(); ctx.strokeStyle='rgba(220,180,255,0.9)'; ctx.shadowColor=p.color; ctx.shadowBlur=24; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.arc(p.x,p.y,PLAYER_RADIUS+12+Math.sin(performance.now()*0.02)*2,0,Math.PI*2); ctx.stroke(); ctx.restore();
+    ctx.beginPath(); ctx.arc(p.x,p.y,playerRadius(p)+12+Math.sin(performance.now()*0.02)*2,0,Math.PI*2); ctx.stroke(); ctx.restore();
   }
-  if(game.block.active>0){ ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=3; ctx.shadowColor='#fff'; ctx.shadowBlur=20; ctx.beginPath(); ctx.arc(p.x,p.y,PLAYER_RADIUS+6,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
+  if(game.block.active>0){ ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=3; ctx.shadowColor='#fff'; ctx.shadowBlur=20; ctx.beginPath(); ctx.arc(p.x,p.y,playerRadius(p)+6,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
   if(p.cls==='green'&&p.dashT>0){ ctx.save(); ctx.strokeStyle=hsl(120,100,70); ctx.shadowColor=p.color; ctx.shadowBlur=22; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(p.x-p.dashVx*0.04,p.y-p.dashVy*0.04); ctx.lineTo(p.x-p.dashVx*0.12,p.y-p.dashVy*0.12); ctx.stroke(); ctx.restore(); }
-  if(p.cls==='orange'&&game.timeFreezeT>0){ ctx.save(); ctx.strokeStyle=hsl(25,100,65); ctx.shadowColor=p.color; ctx.shadowBlur=26; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,PLAYER_RADIUS+10+Math.sin(performance.now()*0.01)*2,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
+  if(p.cls==='orange'&&game.timeFreezeT>0){ ctx.save(); ctx.strokeStyle=hsl(25,100,65); ctx.shadowColor=p.color; ctx.shadowBlur=26; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,playerRadius(p)+10+Math.sin(performance.now()*0.01)*2,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
 
   // Red wind-up warning line
   if(p.cls==='red'&&game.trapWindUp>0){
@@ -2024,31 +2026,31 @@ function drawPlayer(){
   if(p.cls==='green'||p.cls==='red') ctx.rotate(p.angle);
 
   if(p.cls==='orange'){
-    const r=PLAYER_RADIUS; ctx.fillRect(-r,-r,r*2,r*2); ctx.strokeRect(-r,-r,r*2,r*2);
+    const r=playerRadius(p); ctx.fillRect(-r,-r,r*2,r*2); ctx.strokeRect(-r,-r,r*2,r*2);
   } else if(p.cls==='white'){
-    const R=PLAYER_RADIUS+2; ctx.beginPath();
+    const R=playerRadius(p)+2; ctx.beginPath();
     for(let i=0;i<10;i++){const ang=-Math.PI/2+i*Math.PI/5,rr=i%2===0?R:R*0.45; ctx.lineTo(Math.cos(ang)*rr,Math.sin(ang)*rr);}
     ctx.closePath(); ctx.fill(); ctx.stroke();
   } else if(p.cls==='green'){
-    const R=PLAYER_RADIUS+3; ctx.beginPath(); ctx.moveTo(R,0); ctx.lineTo(-R*0.7,-R*0.8); ctx.lineTo(-R*0.3,0); ctx.lineTo(-R*0.7,R*0.8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    const R=playerRadius(p)+3; ctx.beginPath(); ctx.moveTo(R,0); ctx.lineTo(-R*0.7,-R*0.8); ctx.lineTo(-R*0.3,0); ctx.lineTo(-R*0.7,R*0.8); ctx.closePath(); ctx.fill(); ctx.stroke();
   } else if(p.cls==='blue'){
-    ctx.beginPath(); ctx.arc(0,0,PLAYER_RADIUS+1,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,playerRadius(p)+1,0,Math.PI*2); ctx.fill(); ctx.stroke();
   } else if(p.cls==='purple'){
-    const R=PLAYER_RADIUS+3; ctx.beginPath();
+    const R=playerRadius(p)+3; ctx.beginPath();
     for(let i=0;i<8;i++){const a=-Math.PI/8+i*Math.PI/4; ctx.lineTo(Math.cos(a)*R,Math.sin(a)*R);}
     ctx.closePath(); ctx.fill(); ctx.stroke();
   } else if(p.cls==='red'){
-    const R=PLAYER_RADIUS+2; ctx.beginPath(); ctx.moveTo(R,-R*0.7); ctx.lineTo(R,R*0.7); ctx.lineTo(-R*0.55,R*0.42); ctx.lineTo(-R*0.55,-R*0.42); ctx.closePath(); ctx.fill(); ctx.stroke();
+    const R=playerRadius(p)+2; ctx.beginPath(); ctx.moveTo(R,-R*0.7); ctx.lineTo(R,R*0.7); ctx.lineTo(-R*0.55,R*0.42); ctx.lineTo(-R*0.55,-R*0.42); ctx.closePath(); ctx.fill(); ctx.stroke();
   } else if(p.cls==='yellow'){
-    const R=PLAYER_RADIUS+2; ctx.beginPath();
+    const R=playerRadius(p)+2; ctx.beginPath();
     for(let i=0;i<6;i++){const a=i*Math.PI/3; ctx.lineTo(Math.cos(a)*R,Math.sin(a)*R);}
     ctx.closePath(); ctx.fill(); ctx.stroke();
   } else if(p.cls==='pink'){
-    const R=PLAYER_RADIUS+2; ctx.beginPath();
+    const R=playerRadius(p)+2; ctx.beginPath();
     for(let i=0;i<3;i++){const a=-Math.PI/2+i*2*Math.PI/3; ctx.lineTo(Math.cos(a)*R,Math.sin(a)*R);}
     ctx.closePath(); ctx.fill(); ctx.stroke();
   } else if(p.cls==='black'){
-    const R=PLAYER_RADIUS+2;
+    const R=playerRadius(p)+2;
     ctx.fillStyle=blink?'rgba(255,255,255,0.55)':'#1a1a1a'; ctx.strokeStyle='#bbb';
     ctx.beginPath(); ctx.arc(0,-R*0.1,R*0.9,Math.PI,2*Math.PI);
     ctx.lineTo(R*0.5,R*0.45); ctx.lineTo(R*0.2,R*0.45); ctx.lineTo(R*0.18,R*0.7);
@@ -2064,11 +2066,11 @@ function drawPlayer(){
     }
   } else if(p.cls==='kite'){
     // Elongated diamond shape for Kite
-    const R=PLAYER_RADIUS+3;
+    const R=playerRadius(p)+3;
     ctx.beginPath(); ctx.moveTo(0,-R*1.1); ctx.lineTo(R*0.75,0); ctx.lineTo(0,R*1.1); ctx.lineTo(-R*0.75,0); ctx.closePath(); ctx.fill(); ctx.stroke();
   } else if(p.cls==='crescent'){
     // Crescent moon shape — negative-space cutout from a circle
-    const R=PLAYER_RADIUS+2;
+    const R=playerRadius(p)+2;
     ctx.beginPath(); ctx.arc(0,0,R,0,Math.PI*2); ctx.fill(); ctx.stroke();
     ctx.save(); ctx.globalCompositeOperation='destination-out';
     ctx.beginPath(); ctx.arc(R*0.45,0,R*0.85,0,Math.PI*2); ctx.fill(); ctx.restore();
@@ -2079,8 +2081,8 @@ function drawPlayer(){
   if(p.cls!=='green'&&p.cls!=='red'){
     ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.angle);
     ctx.shadowColor=p.color; ctx.shadowBlur=12; ctx.strokeStyle=p.color; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.moveTo(PLAYER_RADIUS+2,0); ctx.lineTo(PLAYER_RADIUS+14,0); ctx.stroke();
-    ctx.fillStyle=p.color; ctx.beginPath(); ctx.moveTo(PLAYER_RADIUS+14,0); ctx.lineTo(PLAYER_RADIUS+9,-4); ctx.lineTo(PLAYER_RADIUS+9,4); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(PLAYER_RADIUS+2,0); ctx.lineTo(playerRadius(p)+14,0); ctx.stroke();
+    ctx.fillStyle=p.color; ctx.beginPath(); ctx.moveTo(playerRadius(p)+14,0); ctx.lineTo(playerRadius(p)+9,-4); ctx.lineTo(playerRadius(p)+9,4); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
   ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1.5;
@@ -2605,6 +2607,11 @@ function renderShopLines(){
     label.className='shop-label';
     label.textContent=tier.label+' ('+currentLevel+'/'+maxLevel+')'+(currentLevel&&disabled?' — disabled':'');
     line.appendChild(label);
+
+    const desc=document.createElement('div');
+    desc.className='shop-desc';
+    desc.textContent=tier.desc || '';
+    line.appendChild(desc);
 
     const tiers=document.createElement('div');
     tiers.className='shop-tiers';

@@ -120,6 +120,7 @@ canvas { display: block; background: #000; }
 .shop-tier.locked-tier { opacity: 0.35; cursor: default; }
 .shop-tier.affordable { cursor: pointer; }
 .shop-label { font-size: 11px; opacity: 0.7; margin-bottom: 4px; }
+.shop-desc { font-size: 10px; opacity: 0.72; margin: -1px 0 8px; line-height: 1.4; color: #b9c7db; }
 
 /* Info modal */
 #infoModal {

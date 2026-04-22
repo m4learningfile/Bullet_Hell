@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>SHAPES · V3</title>
-<link rel="stylesheet" href="SHAPES_V3.css" />
+<title>SHAPES · V4</title>
+<link rel="stylesheet" href="SHAPES_V4.css" />
 </head>
 <body>
 
@@ -65,11 +65,6 @@
         <input type="range" id="masterVol" min="0" max="100" value="32">
         <span id="masterVolVal">32%</span>
       </div>
-      <div class="option-row option-row-check">
-        <label for="eliteToggle">Elite Enemies (overcrowd relief)</label>
-        <input type="checkbox" id="eliteToggle">
-      </div>
-      <div class="option-desc">When enabled, some enemies in each wave become stronger (more HP &amp; speed) but award extra points on death. Helps combat overcrowding at higher waves.</div>
       <div class="option-row">
         <label for="shootMode">Shooting</label>
         <select id="shootMode">
@@ -148,6 +143,7 @@
   <div class="boon-wrap">
     <div class="title">CHOOSE A BOON</div>
     <div class="subtitle">Wave cleared. Pick one upgrade and keep going.</div>
+    <div id="boonCurrentStats" class="boon-current-stats"></div>
     <div class="boon-grid" id="boonGrid"></div>
   </div>
 </div>
@@ -176,6 +172,7 @@
       <div id="pauseStats"></div>
     </div>
   </div>
+  <div id="pauseScaling" class="pause-scaling"></div>
 </div>
 
 <div id="gameover">
@@ -184,6 +181,6 @@
   <button onclick="location.reload()">TRY AGAIN</button>
 </div>
 
-<script src="SHAPES_V3.js"></script>
+<script src="SHAPES_V4.js"></script>
 </body>
 </html>
