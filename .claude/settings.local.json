@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python _syntaxcheck.py)",
+      "Bash(python3 -)",
+      "Bash(sed -n '1,59p' SHAPES_V5.js)",
+      "Bash(sed -n '60,293p' SHAPES_V5.js)",
+      "Bash(sed -n '294,346p' SHAPES_V5.js)",
+      "Bash(sed -n '347,518p' SHAPES_V5.js)",
+      "Bash(sed -n '519,738p' SHAPES_V5.js)",
+      "Bash(cat 01_constants.js 02_save_unlocks.js 03_canvas_input.js 04_audio.js 05_utils.js 06_boons.js 07_state.js 08_player.js 09_enemies_bullets.js 10_waves.js 11_render.js 12_main_menu.js)",
+      "Read(//tmp/**)"
+    ]
+  }
+}

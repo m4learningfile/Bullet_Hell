@@ -260,8 +260,8 @@ const BOSS_INFO = {
   },
   trapezoid:{
     name:'TRAPEZOID BOSS', difficulty:'Hard',
-    desc:'Appears as a linked pair. Both trapezoids share HP and bounce off arena walls in synchronized patterns. Beating one ends the fight.',
-    tips:'Focus fire one at a time. The shared HP pool means splitting damage wastes DPS.',
+    desc:'Appears as a linked pair. Each boss trapezoid is exactly twice the size of a normal trapezoid, phases through units, bounces off walls twice, then stops on the third wall contact.',
+    tips:'Watch the full guide line during the charge. It previews both ricochets, so dodge the whole route rather than only the first dash.',
   },
   octagon:{
     name:'OCTAGON',        difficulty:'Hard',
@@ -516,6 +516,35 @@ function arenaRect(){
   const maxW=BASE_W*0.95, maxH=BASE_H*0.90;
   const aw=Math.min(w,maxW), ah=Math.min(h,maxH);
   return{ x:(BASE_W-aw)/2, y:(BASE_H-ah)/2, w:aw, h:ah };
+}
+
+function getTrapezoidGuidePoints(e){
+  const A=arenaRect();
+  const points=[{x:e.x,y:e.y}];
+  let x=e.x, y=e.y;
+  let dx=e.warnDx||0, dy=e.warnDy||0;
+  const mag=Math.hypot(dx,dy)||1;
+  dx/=mag; dy/=mag;
+  const maxHits=(e.boss?3:1);
+  let hits=0;
+  while(hits<maxHits){
+    let tx=Infinity, ty=Infinity;
+    if(dx>0) tx=(A.x+A.w-e.r-x)/dx;
+    else if(dx<0) tx=(A.x+e.r-x)/dx;
+    if(dy>0) ty=(A.y+A.h-e.r-y)/dy;
+    else if(dy<0) ty=(A.y+e.r-y)/dy;
+    let t=Math.min(tx,ty);
+    if(!isFinite(t) || t<=0) break;
+    x+=dx*t; y+=dy*t;
+    points.push({x,y});
+    hits++;
+    if(hits>=maxHits) break;
+    const hitX=Math.abs(t-tx)<0.0001;
+    const hitY=Math.abs(t-ty)<0.0001;
+    if(hitX) dx*=-1;
+    if(hitY) dy*=-1;
+  }
+  return points;
 }
 function playerRadius(p){ return (p && p.radius) || PLAYER_RADIUS; }
 
@@ -871,7 +900,7 @@ function updatePlayer(dt){
     if(p.trailHits){ for(const [e,cd] of p.trailHits){ const nx=cd-dt; if(nx<=0||e.hp<=0) p.trailHits.delete(e); else p.trailHits.set(e,nx); } }
     const tickDmg=CLASSES.kite.trailTickDmg+game.upgrades.skillDamage*2;
     for(const e of game.enemies){
-      if(e.hp<=0||e.state==='spawn'||e.type==='healthpack') continue;
+      if(e.hp<=0||e.state==='spawn') continue;
       if((p.trailHits&&p.trailHits.get(e)||0)>0) continue;
       // Check segment proximity
       let onTrail=false;
@@ -1254,6 +1283,7 @@ function updateHexTriangles(dt){
   // V2: Triangles no longer dash. They follow cursor while shooting; otherwise drift toward player/enemies.
   //     Contact with enemies deals skill-damage-scaling damage on a 0.5s per-target cooldown.
   const firingHeld = mouse.down || mouse.toggleFire;
+  const claimedTargets = new Set();
   for(let i=game.hexTriangles.length-1;i>=0;i--){
     const t=game.hexTriangles[i];
     if(t.hp<=0){ spawnParticles(t.x,t.y,'#ff69b4',12,180); game.hexTriangles.splice(i,1); continue; }
@@ -1265,18 +1295,27 @@ function updateHexTriangles(dt){
     let tx, ty;
     if(firingHeld){ tx=game.aimX; ty=game.aimY; }
     else {
-      // Seek nearest enemy (excluding health packs), or loiter near the player
-      let nearest=null, nD2=Infinity;
-      for(const e of game.enemies){ if(e.state==='spawn'||e.hp<=0||e.type==='healthpack') continue; const d2=dist2(t.x,t.y,e.x,e.y); if(d2<nD2){nD2=d2;nearest=e;} }
-      if(nearest){ tx=nearest.x; ty=nearest.y; }
+      // Prefer a unique target for each triangle. Only double up if there are more triangles than valid targets.
+      let nearestUnclaimed=null, nearestAny=null, nUnclaimed=Infinity, nAny=Infinity;
+      for(const e of game.enemies){
+        if(e.state==='spawn'||e.hp<=0) continue;
+        const d2=dist2(t.x,t.y,e.x,e.y);
+        if(d2<nAny){ nAny=d2; nearestAny=e; }
+        if(!claimedTargets.has(e) && d2<nUnclaimed){ nUnclaimed=d2; nearestUnclaimed=e; }
+      }
+      const target = nearestUnclaimed || nearestAny;
+      if(target){
+        claimedTargets.add(target);
+        tx=target.x; ty=target.y;
+      }
       else { tx=p.x; ty=p.y; }
     }
     const dx=tx-t.x, dy=ty-t.y, d=Math.hypot(dx,dy)||1;
     if(d>10){ t.x+=(dx/d)*triSpeed*dt; t.y+=(dy/d)*triSpeed*dt; }
 
-    // Contact damage (never interacts with health packs)
+    // Contact damage (can hit enemies and health packs)
     for(const e of game.enemies){
-      if(e.hp<=0||e.state==='spawn'||e.type==='healthpack') continue;
+      if(e.hp<=0||e.state==='spawn') continue;
       if(dist2(t.x,t.y,e.x,e.y)<(e.r+12)**2){
         if(!t.hitCD) t.hitCD=new Map();
         if((t.hitCD.get(e)||0)>0) continue;
@@ -1290,14 +1329,6 @@ function updateHexTriangles(dt){
       }
     }
 
-    // Extra safety: if a triangle overlaps a health pack, ignore it completely
-    for(const e of game.enemies){
-      if(e.type!=='healthpack') continue;
-      if(dist2(t.x,t.y,e.x,e.y)<(e.r+12)**2){
-        if(!t.hitCD) t.hitCD=new Map();
-        t.hitCD.delete(e);
-      }
-    }
     t.x=clamp(t.x,A.x+10,A.x+A.w-10);
     t.y=clamp(t.y,A.y+10,A.y+A.h-10);
   }
@@ -1345,7 +1376,7 @@ function spawnEnemy(type, opts={}){
   }
   const bossScale=opts.boss?getBossScale():{hp:1,speed:1};
   const runScale=getEnemyRunScale();
-  const bossSizeMul=opts.boss?(type==='trapezoid'?2.0:1.8):1.0; // V2: trapezoid boss = 200% of normal trapezoid size
+  const bossSizeMul=opts.boss?(type==='trapezoid'?2.0:1.8):1.0;
   const sizeScale=(game.mode==='endless'?1.35:1.0)*bossSizeMul*(opts.elite?1.1:1.0);
   const baseSpeedMult=1.2;
   let bossSpeedMult=opts.boss?(type==='trapezoid'?2.0:(type==='arrow'?0.72:(type==='circle'?2.5:1.6))):1.0;
@@ -1685,6 +1716,10 @@ function updateBullets(dt){
         if(p.cls==='white'&&game.ability.active>0){
           if((e.auraTimer||0)<=0){ const td=C.touchDmg+currentSkillDamageBonus('white'); e.hp-=td; game.stats.skillDamage+=td; e.hitFlash=0.12; e.auraTimer=C.touchTick; const hue=(performance.now()*0.5)%360; spawnParticles(e.x,e.y,hsl(hue,90,70),8,200); if(e.hp<=0){spawnParticles(e.x,e.y,hsl(e.hueA,80,70),20,220);Audio.noise(0.15,0.12);} }
           continue;
+        }
+        if(e.type==='trapezoid'&&e.boss&&e.state2==='dash'){
+          damagePlayer(1);
+          break;
         }
         damagePlayer(1);
         const dx=e.x-p.x,dy=e.y-p.y,d=Math.hypot(dx,dy)||1;
@@ -2118,6 +2153,7 @@ function drawHexTriangles(){
 }
 
 function drawEnemy(e){
+  if(e.hp<=0) return;
   const t=performance.now()*0.002;
   const h1=(e.hueA+Math.sin(t+e.phase)*20)%360, h2=(e.hueB+Math.cos(t+e.phase)*20)%360;
   const bg=game.bgHue; let mainH=h1;
@@ -2139,8 +2175,18 @@ function drawEnemy(e){
   ctx.lineWidth=2.5; ctx.strokeStyle=e.hitFlash>0?'#fff':hsl(mainH,100,85,0.95);
 
   if(e.type==='trapezoid'&&e.state2==='charge'){
-    ctx.save(); ctx.rotate(e.angle?-e.angle:0); ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=2; ctx.shadowBlur=10;
-    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(e.warnDx*1200,e.warnDy*1200); ctx.stroke(); ctx.restore();
+    ctx.save();
+    ctx.strokeStyle='rgba(255,255,255,0.85)';
+    ctx.lineWidth=2;
+    ctx.shadowBlur=10;
+    ctx.setLineDash([8,6]);
+    const pts=e.boss?getTrapezoidGuidePoints(e):[{x:e.x,y:e.y},{x:e.x+e.warnDx*1200,y:e.y+e.warnDy*1200}];
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x-e.x,pts[0].y-e.y);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x-e.x,pts[i].y-e.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
   }
 
   switch(e.type){
@@ -2196,7 +2242,7 @@ function drawEnemy(e){
   }
 
   if(e.boss){ctx.save();ctx.rotate(e.angle?-e.angle:0);ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.font='700 10px Segoe UI';ctx.textAlign='center';ctx.fillText('BOSS',0,-e.r-18);ctx.restore();}
-  if(e.hp<e.maxHp){
+  if(e.hp>0 && e.hp<e.maxHp){
     ctx.rotate(e.angle?-e.angle:0);
     const w=e.r*2,hh=4,yy=-e.r-12; ctx.shadowBlur=0;
     ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(-w/2,yy,w,hh);
