@@ -260,7 +260,19 @@ function updateWave(dt){
 function gameOver(){
   game.state='dead';
   recordRunStats();
-  document.getElementById('goStats').innerHTML=game.mode.toUpperCase()+' MODE · '+game.difficulty.toUpperCase()+'<br>You reached wave <b>'+game.wave+'</b>.<br>Highest: <b>'+game.highest+'</b>';
+  const t=Math.floor(game.runTime||0), mm=String(Math.floor(t/60)).padStart(2,'0'), ss=String(t%60).padStart(2,'0');
+  const cls=game.chosenClass?CLASS_INFO[game.chosenClass].name:'—';
+  document.getElementById('goStats').innerHTML=
+     '<div class="ps-row"><b>Class</b><span>'+cls+'</span></div>'
+    +'<div class="ps-row"><b>Mode</b><span>'+game.mode.toUpperCase()+'</span></div>'
+    +'<div class="ps-row"><b>Difficulty</b><span>'+game.difficulty.toUpperCase()+'</span></div>'
+    +'<div class="ps-row"><b>Wave reached</b><span>'+game.wave+'</span></div>'
+    +'<div class="ps-row"><b>Highest</b><span>'+game.highest+'</span></div>'
+    +'<div class="ps-row"><b>Run time</b><span>'+mm+':'+ss+'</span></div>'
+    +'<div class="ps-row"><b>Enemies defeated</b><span>'+game.stats.enemiesKilled+'</span></div>'
+    +'<div class="ps-row"><b>Bosses defeated</b><span>'+game.stats.bossesKilled+'</span></div>'
+    +'<div class="ps-row"><b>Bullet damage</b><span>'+game.stats.bulletDamage+'</span></div>'
+    +'<div class="ps-row"><b>Skill damage</b><span>'+game.stats.skillDamage+'</span></div>';
   document.getElementById('gameover').style.display='flex';
   Audio.noise(0.8,0.4);
 }

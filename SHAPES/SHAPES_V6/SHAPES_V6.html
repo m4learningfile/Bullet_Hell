@@ -12,7 +12,7 @@
 
 <div id="menu">
   <div class="title">SHAPES</div>
-  <div class="subtitle">YOU DON'T OVERPOWER THE CHAOS — YOU SURVIVE IT</div>
+  <div class="subtitle">A polygun game</div>
 
   <div id="titleStep">
     <div class="title-buttons">
@@ -52,6 +52,7 @@
       <button class="comp-tab active" data-comp="classes">CLASSES</button>
       <button class="comp-tab" data-comp="enemies">ENEMIES</button>
       <button class="comp-tab" data-comp="bosses">BOSSES</button>
+      <button class="comp-tab" data-comp="boons">BOONS</button>
     </div>
     <div id="compendiumContent"></div>
     <button class="menu-back" id="backFromCompendium">BACK</button>
@@ -69,7 +70,7 @@
         <label for="eliteToggle">Elite Enemies (overcrowd relief)</label>
         <input type="checkbox" id="eliteToggle">
       </div>
-      <div class="option-desc">When enabled, some enemies in each wave become stronger (more HP &amp; speed) but award extra points on death. Helps combat overcrowding at higher waves.</div>
+      <div class="option-desc">When enabled, some enemies in each wave become stronger but award extra points on death. Helps combat overcrowding at higher waves.</div>
       <div class="option-row">
         <label for="shootMode">Shooting</label>
         <select id="shootMode">
@@ -94,7 +95,7 @@
       <button class="mode-btn" data-mode="endless" id="endlessBtn">ENDLESS MODE</button>
       <button class="mode-btn" data-mode="gauntlet">BOSS GAUNTLET</button>
     </div>
-    <div class="mode-desc" id="modeDesc">Intro Mode: fixed teaching waves 1–10, then ramps into the point system.</div>
+    <div class="mode-desc" id="modeDesc">Intro Mode: fixed teaching waves 1–10. Normal enemies only, then the run ends.</div>
 
     <div class="menu-step" style="margin-top:10px;">2. Choose a difficulty</div>
     <div class="mode-select">
@@ -103,7 +104,7 @@
       <button class="mode-btn" data-difficulty="hard">HARD (1.5x)</button>
       <button class="mode-btn" data-difficulty="insane">INSANE (2.0x)</button>
     </div>
-    <div class="mode-desc" id="difficultyDesc">Easy (0.5x): 80% chance per wave to spawn a green health pack. Killing it restores 1 HP.</div>
+    <div class="mode-desc" id="difficultyDesc">Easy (0.5x): 80% chance per wave to spawn a green health pack. Killing it restores 10 HP.</div>
 
     <button class="menu-back" id="continueToClass">CONTINUE TO CLASS SELECT</button>
     <button class="menu-back" id="backToTitle">BACK TO TITLE</button>
@@ -117,30 +118,40 @@
         <div class="class-preview" id="classPreview">
           <div class="preview-shape" id="previewShape"></div>
           <div class="preview-name" id="previewName">CLASS</div>
-          <div class="preview-desc" id="previewDesc">Hover or click a class to preview.</div>
+          <div class="preview-desc" id="previewDesc">Pick a class to see a description, strengths and starter ability.</div>
+          <button class="menu-back" id="thirdDimensionBtn">Third Dimension</button>
         </div>
-        <button id="openUpgradesBtn" class="upgrades-btn-standalone">UPGRADES (<span id="upgradesPointsLabel">0</span> pt)</button>
+        <button class="menu-back" id="openUpgradesBtn">OPEN UPGRADES</button>
       </div>
     </div>
     <button class="menu-back" id="backToMode">BACK TO MODE SELECT</button>
   </div>
 
-  <div id="upgradesStep" style="display:none;">
-    <div class="menu-step">PRE-RUN UPGRADES</div>
-    <div class="shop-header">Points available: <span id="shopPoints">0</span></div>
-    <div class="shop-hint">Click an owned tier to toggle it on/off for this run (saves are shared).</div>
-    <div id="shopLines"></div>
-    <button class="menu-back" id="backFromUpgrades">BACK TO CLASS SELECT</button>
+  <div id="thirdDimensionStep" style="display:none;">
+    <div class="td-panel-big">
+      <div class="td-title">THIRD DIMENSION</div>
+      <div class="td-left-panel"></div>
+      <div class="td-cube-host">
+        <button class="td-arrow" id="tdArrowLeft" aria-label="rotate left">&#x2039;</button>
+        <div class="cube3d-wrap td-cube"><div class="cube3d-bounce"><div class="cube3d">
+          <div class="face front"></div><div class="face right"></div><div class="face back"></div><div class="face left"></div>
+        </div></div></div>
+        <button class="td-arrow" id="tdArrowRight" aria-label="rotate right">&#x203A;</button>
+      </div>
+    </div>
+    <button class="menu-back" id="thirdDimensionBack">BACK</button>
   </div>
 
-  <div class="hint">WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · RIGHT CLICK ABILITY · SPACE BLOCK</div>
-</div>
-
-<div id="infoModal" style="display:none;">
-  <div class="info-modal-box">
-    <div class="info-modal-title" id="infoModalTitle"></div>
-    <div class="info-modal-body" id="infoModalBody"></div>
-    <button id="infoModalClose">CLOSE</button>
+  <div id="upgradesStep" style="display:none;">
+    <div class="menu-step">PRE-RUN UPGRADES</div>
+    <div class="upgrades-panel">
+      <div class="upgrades-summary">
+        <div class="upgrades-item">Shop Points: <span id="shopPoints">0</span></div>
+        <div class="upgrades-item">Upgrade Points: <span id="upgradesPointsLabel">0</span></div>
+      </div>
+      <div class="shop-lines" id="shopLines"></div>
+    </div>
+    <button class="menu-back" id="backFromUpgrades">BACK TO CLASS SELECT</button>
   </div>
 </div>
 
@@ -180,24 +191,40 @@
   <div id="pauseScaling" class="pause-scaling"></div>
 </div>
 
-<div id="gameover">
-  <h2>SURVIVAL ENDED</h2>
-  <div class="stats" id="goStats"></div>
-  <button onclick="location.reload()">TRY AGAIN</button>
+<div id="infoModal" style="display:none;">
+  <div class="info-panel">
+    <button id="infoModalClose">CLOSE</button>
+    <div class="info-title" id="infoModalTitle"></div>
+    <div class="info-body" id="infoModalBody"></div>
+  </div>
 </div>
 
-<script src="01_constants.js"></script>
-<script src="02_save_unlocks.js"></script>
-<script src="03_canvas_input.js"></script>
-<script src="04_audio.js"></script>
-<script src="05_utils.js"></script>
-<script src="06_boons.js"></script>
-<script src="07_state.js"></script>
-<script src="08_player.js"></script>
-<script src="09_enemies_bullets.js"></script>
-<script src="10_waves.js"></script>
-<script src="11_render.js"></script>
-<script src="dimensions.js"></script>
-<script src="12_main_menu.js"></script>
+<div id="gameover">
+  <div class="title">GAME OVER</div>
+  <div class="subtitle">Your run has ended</div>
+  <div class="pause-panel go-stats-panel">
+    <h3>RUN STATS</h3>
+    <div id="goStats"></div>
+  </div>
+  <div class="go-buttons">
+    <button class="pause-btn" id="goRetry">TRY AGAIN</button>
+    <button class="pause-btn" id="goMenu">RETURN TO MENU</button>
+  </div>
+</div>
+
+<script src="SHAPES_V6_js/01_constants.js"></script>
+<script src="SHAPES_V6_js/02_save_unlocks.js"></script>
+<script src="SHAPES_V6_js/03_canvas_input.js"></script>
+<script src="SHAPES_V6_js/04_audio.js"></script>
+<script src="SHAPES_V6_js/05_utils.js"></script>
+<script src="SHAPES_V6_js/06_boons.js"></script>
+<script src="SHAPES_V6_js/07_state.js"></script>
+<script src="SHAPES_V6_js/08_player.js"></script>
+<script src="SHAPES_V6_js/09_enemies_bullets.js"></script>
+<script src="SHAPES_V6_js/10_waves.js"></script>
+<script src="SHAPES_V6_js/11_render.js"></script>
+<script src="SHAPES_V6_js/dimensions.js"></script>
+<script src="SHAPES_V6_js/12_main_menu.js"></script>
+
 </body>
 </html>

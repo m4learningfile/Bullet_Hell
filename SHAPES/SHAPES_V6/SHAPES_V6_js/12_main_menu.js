@@ -7,6 +7,8 @@ function frame(now){
   const dt = Math.min(0.033, lastT ? (now-lastT)/1000 : 0);
   lastT = now;
 
+  updateCamera();
+
   if(!paused && (game.state==='playing'||game.state==='wavebreak')){
     updatePlayer(dt);
     updateEnemies(dt);
@@ -32,13 +34,11 @@ function frame(now){
   const sx=(Math.random()-0.5)*game.shake;
   const sy=(Math.random()-0.5)*game.shake;
   const scale=screenScale();
-  ctx.setTransform(1,0,0,1,sx*scale,sy*scale);
+  ctx.setTransform(scale,0,0,scale,sx*scale - camera.x*scale, sy*scale - camera.y*scale);
 
   drawBackground(dt);
 
-  // Scale to game coordinates
   ctx.save();
-  ctx.scale(scale,scale);
 
   for(const e of game.enemies) drawEnemy(e);
   drawHexTriangles();
@@ -52,11 +52,12 @@ function frame(now){
     ctx.fillStyle='rgba(255,140,42,0.12)';
     ctx.fillRect(0,0,BASE_W,BASE_H);
   }
+
+  ctx.setTransform(scale,0,0,scale,0,0);
   if(game.flash>0){
     ctx.fillStyle='rgba(255,80,80,'+(game.flash*0.5)+')';
     ctx.fillRect(0,0,BASE_W,BASE_H);
   }
-
   drawHUD();
 
   ctx.restore();
@@ -214,6 +215,8 @@ function updateClassPreview(cls){
   const nameEl=document.getElementById('previewName');
   const descEl=document.getElementById('previewDesc');
   if(!shapeEl||!nameEl||!descEl) return;
+  const tdBtn=document.getElementById('thirdDimensionBtn');
+  if(tdBtn) tdBtn.style.display = (cls==='orange' && isUnlocked('orange')) ? '' : 'none';
   if(!cls||!isUnlocked(cls)){
     shapeEl.innerHTML='<div style="font-size:48px;opacity:0.4;">???</div>';
     nameEl.textContent='LOCKED';
@@ -419,7 +422,7 @@ function startGameWithClass(cls){
 
 // ---- TITLE / COMPENDIUM / OPTIONS ----
 function showMenuStep(which){
-  for(const id of ['titleStep','compendiumStep','optionsStep','modeStep','classStep','upgradesStep','memoryHallStep']){
+  for(const id of ['titleStep','compendiumStep','optionsStep','modeStep','classStep','upgradesStep','memoryHallStep','thirdDimensionStep']){
     const el=document.getElementById(id);
     if(el) el.style.display=(id===which)?'block':'none';
   }
@@ -436,6 +439,21 @@ document.getElementById('backFromMemoryHall').addEventListener('click',()=>showM
 document.getElementById('backFromCompendium').addEventListener('click',()=>showMenuStep('titleStep'));
 document.getElementById('backFromOptions').addEventListener('click',()=>showMenuStep('titleStep'));
 document.getElementById('backToTitle').addEventListener('click',()=>showMenuStep('titleStep'));
+const thirdDimBtn=document.getElementById('thirdDimensionBtn');
+if(thirdDimBtn) thirdDimBtn.addEventListener('click',()=>showMenuStep('thirdDimensionStep'));
+const thirdDimBack=document.getElementById('thirdDimensionBack');
+if(thirdDimBack) thirdDimBack.addEventListener('click',()=>showMenuStep('classStep'));
+
+let tdCubeRotation = 0;
+function tdRotateCube(delta){
+  tdCubeRotation += delta;
+  const cube = document.querySelector('#thirdDimensionStep .td-cube .cube3d');
+  if(cube) cube.style.transform = 'rotateY('+tdCubeRotation+'deg)';
+}
+const tdArrowLeft = document.getElementById('tdArrowLeft');
+if(tdArrowLeft) tdArrowLeft.addEventListener('click',()=>tdRotateCube(-90));
+const tdArrowRight = document.getElementById('tdArrowRight');
+if(tdArrowRight) tdArrowRight.addEventListener('click',()=>tdRotateCube(90));
 
 // Compendium
 document.querySelectorAll('.comp-tab').forEach(btn=>{
@@ -772,6 +790,16 @@ document.getElementById('pauseRestart').addEventListener('click',()=>{
 document.getElementById('pauseForfeit').addEventListener('click',()=>{
   if(!confirm('Forfeit and return to the main menu?')) return;
   togglePause();
+  game.state='menu';
+  document.getElementById('menu').style.display='flex';
+  showMenuStep('titleStep');
+});
+
+const goRetryBtn=document.getElementById('goRetry');
+if(goRetryBtn) goRetryBtn.addEventListener('click',()=>location.reload());
+const goMenuBtn=document.getElementById('goMenu');
+if(goMenuBtn) goMenuBtn.addEventListener('click',()=>{
+  document.getElementById('gameover').style.display='none';
   game.state='menu';
   document.getElementById('menu').style.display='flex';
   showMenuStep('titleStep');

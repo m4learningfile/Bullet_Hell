@@ -149,14 +149,63 @@ canvas { display: block; background: #000; }
 .boon-card:hover { transform: translateY(-4px); border-color: #8fd2ff; box-shadow: 0 0 22px rgba(110,200,255,0.22); }
 .boon-card h3 { margin: 0 0 10px; font-size: 18px; }
 .boon-card p { margin: 0; font-size: 13px; line-height: 1.5; opacity: 0.82; }
-#gameover h2 { font-size: 36px; margin: 0 0 8px; }
-#gameover .stats { font-size: 16px; opacity: 0.85; margin-bottom: 24px; }
-#gameover button {
-  padding: 12px 28px; font-size: 14px; letter-spacing: 2px;
-  background: #222; color: #eee; border: 2px solid #666;
-  border-radius: 6px; cursor: pointer;
+#thirdDimensionStep { max-width: 1100px; width: 100%; }
+.td-panel-big {
+  background: rgba(20,22,32,0.8);
+  border: 1px solid #3a3d48;
+  border-radius: 14px;
+  padding: 32px 40px 40px;
+  min-height: 680px;
+  display: grid;
+  grid-template-areas:
+    "title title"
+    "left  cube";
+  grid-template-rows: auto 1fr;
+  grid-template-columns: 1.25fr 2fr;
+  gap: 24px;
 }
-#gameover button:hover { background: #333; border-color: #aaa; }
+.td-title { grid-area: title; font-size: 32px; font-weight: 700; letter-spacing: 10px; text-align: center;
+  background: linear-gradient(90deg,#ff8c2a,#4dff6a,#66d9ff,#a855f7,#ff69b4);
+  -webkit-background-clip: text; background-clip: text; color: transparent; margin: 0 0 4px; }
+.td-left-panel { grid-area: left; background: rgba(8,10,16,0.85); border: 1px solid #2a2d38; border-radius: 10px; min-height: 560px; }
+.td-cube-host { grid-area: cube; display: flex; align-items: center; justify-content: center; gap: 14px; }
+.td-cube-host .cube3d-wrap { --cube-size: 300px; --cube-half: 150px; width: 440px; height: 440px; perspective: 1800px; }
+.td-cube .cube3d { animation: none; transition: transform 0.55s cubic-bezier(0.45, 0.05, 0.55, 0.95); }
+.td-arrow {
+  flex-shrink: 0;
+  width: 54px; height: 54px;
+  background: rgba(15,17,24,0.85);
+  border: 1px solid #3a3d48;
+  border-radius: 10px;
+  color: #eee;
+  font-size: 32px; line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.td-arrow:hover { border-color: #9cf; background: rgba(30,35,48,0.9); }
+.td-arrow:active { transform: scale(0.94); }
+
+.cube3d-wrap { --cube-size: 30px; --cube-half: 15px; display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; perspective: 260px; }
+.preview-shape .cube3d-wrap { --cube-size: 60px; --cube-half: 30px; width: 100%; height: 100%; perspective: 520px; }
+.cube3d-bounce { transform-style: preserve-3d; animation: cube3d-bounce 2.2s ease-in-out infinite; }
+.cube3d { width: var(--cube-size); height: var(--cube-size); position: relative; transform-style: preserve-3d; animation: cube3d-spin 4.5s linear infinite; }
+.cube3d .face { position: absolute; left: 0; top: 0; width: var(--cube-size); height: var(--cube-size); border: 1.5px solid #fff; box-sizing: border-box; background: #ff8c2a; }
+.cube3d .front { transform: translateZ(var(--cube-half)); }
+.cube3d .right { transform: rotateY(90deg)  translateZ(var(--cube-half)); background: #d56e11; }
+.cube3d .back  { transform: rotateY(180deg) translateZ(var(--cube-half)); }
+.cube3d .left  { transform: rotateY(-90deg) translateZ(var(--cube-half)); background: #d56e11; }
+.cube3d-locked .face { background: #151515 !important; border-color: #333; }
+@keyframes cube3d-spin   { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+@keyframes cube3d-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+.go-stats-panel { max-width: 560px; width: 100%; text-align: left; margin-top: 4px; }
+.go-stats-panel h3 { margin: 0 0 6px; font-size: 14px; letter-spacing: 3px; color: #9cf; border-bottom: 1px solid #2a2d38; padding-bottom: 8px; }
+.go-buttons { display: flex; gap: 14px; justify-content: center; margin-top: 24px; }
+#goStats { font-size: 13px; line-height: 1.9; }
+#goStats .ps-row { display: flex; justify-content: space-between; }
+#goStats .ps-row b { color: #fff; }
+#goStats .ps-row span { color: #ffd166; }
 
 .wave-banner {
   position: fixed; top: 40%; left: 50%;

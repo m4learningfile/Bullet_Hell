@@ -460,10 +460,11 @@ function drawHUD(){
   const order=['circle','triangle','arrow','hexagon','diamond','trapezoid','octagon'];
   const labels={circle:'Circles',triangle:'Triangles',arrow:'Arrows',hexagon:'Hexagons',diamond:'Diamonds',trapezoid:'Trapezoids',octagon:'Octagons'};
   ctx.textAlign='right'; ctx.font='600 13px Segoe UI';
+  const enemyListY = BASE_H - 118;
   for(let i=0;i<order.length;i++){
     const c=counts[order[i]];
     ctx.fillStyle=c>0?(skullHUD?'#000':'#fff'):(skullHUD?'rgba(0,0,0,0.3)':'rgba(255,255,255,0.3)');
-    ctx.fillText(labels[order[i]]+': '+c,BASE_W-30,BASE_H-108+i*18);
+    ctx.fillText(labels[order[i]]+': '+c,BASE_W-30,enemyListY+i*18);
   }
 
   // Cooldowns

@@ -271,7 +271,7 @@ function updatePlayer(dt){
 function summonHexTriangle(){
   const p=game.player; if(!p) return;
   const baseHp=30+(game.yellowTriHpBonus||0);
-  game.hexTriangles.push({ x:p.x+(Math.random()-0.5)*50, y:p.y+(Math.random()-0.5)*50, hp:baseHp, maxHp:baseHp, angle:Math.random()*Math.PI*2, dashT:0, dashVx:0, dashVy:0, stateT:0.5, dashHits:null });
+  game.hexTriangles.push({ x:p.x+(Math.random()-0.5)*50, y:p.y+(Math.random()-0.5)*50, r:12, hp:baseHp, maxHp:baseHp, angle:Math.random()*Math.PI*2, dashT:0, dashVx:0, dashVy:0, stateT:0.5, dashHits:null });
   if(p.cls==='yellow') game.ability.t=effectiveAbilityCooldown('yellow');
   else if(game.upgrades.borrowedAbility==='yellow') game.borrowed.t=effectiveBorrowedCooldown('yellow');
   Audio.blip(660,0.12,'triangle',0.12);
