@@ -4,18 +4,17 @@
 function drawBackground(dt){
   game.bgT+=dt*0.15;
   game.bgHue=lerp(game.bgHue,game.bgPhase,1-Math.exp(-dt*0.3));
-  const h=game.bgHue, s=screenScale();
-  ctx.save(); ctx.scale(s,s);
+  const h=game.bgHue;
   const skullBG=game.skullFinalPhase;
   const variant = game.mapVariant||0;
-  const g=ctx.createLinearGradient(0,0,BASE_W,BASE_H);
+  const g=ctx.createLinearGradient(0,0,WORLD_W,WORLD_H);
   if(skullBG){g.addColorStop(0,'#f8f8f8');g.addColorStop(0.5,'#ffffff');g.addColorStop(1,'#f0f0f0');}
   else if(variant===0){g.addColorStop(0,'#04070e');g.addColorStop(0.5,'#091220');g.addColorStop(1,'#03060b');}
   else if(variant===1){g.addColorStop(0,'#04111c');g.addColorStop(0.5,'#0d2740');g.addColorStop(1,'#061522');}
   else if(variant===2){g.addColorStop(0,'#1a0608');g.addColorStop(0.5,'#3d1017');g.addColorStop(1,'#120509');}
   else if(variant===3){g.addColorStop(0,'#081207');g.addColorStop(0.5,'#163114');g.addColorStop(1,'#060e06');}
   else {g.addColorStop(0,'#0a0813');g.addColorStop(0.5,'#22153a');g.addColorStop(1,'#07060d');}
-  ctx.fillStyle=g; ctx.fillRect(0,0,BASE_W,BASE_H);
+  ctx.fillStyle=g; ctx.fillRect(0,0,WORLD_W,WORLD_H);
 
   const A=arenaRect();
   if(!skullBG){
@@ -41,12 +40,12 @@ function drawBackground(dt){
     ctx.restore();
   }
 
-  if(game.skullFlash>0){ game.skullFlash=Math.max(0,game.skullFlash-dt); ctx.fillStyle='rgba(255,255,255,'+(0.25*game.skullFlash)+')'; ctx.fillRect(0,0,BASE_W,BASE_H); }
+  if(game.skullFlash>0){ game.skullFlash=Math.max(0,game.skullFlash-dt); ctx.fillStyle='rgba(255,255,255,'+(0.25*game.skullFlash)+')'; ctx.fillRect(0,0,WORLD_W,WORLD_H); }
   for(let i=0;i<3;i++){
-    const t=game.bgT+i*1.3, x=BASE_W/2+Math.cos(t*0.3+i)*300, y=BASE_H/2+Math.sin(t*0.4+i*2)*200;
-    const rg=ctx.createRadialGradient(x,y,0,x,y,500);
+    const t=game.bgT+i*1.3, x=WORLD_W/2+Math.cos(t*0.3+i)*600, y=WORLD_H/2+Math.sin(t*0.4+i*2)*400;
+    const rg=ctx.createRadialGradient(x,y,0,x,y,900);
     rg.addColorStop(0,hsl(h+i*40,60,16,0.55)); rg.addColorStop(1,hsl(h+i*40,60,10,0));
-    ctx.fillStyle=rg; ctx.fillRect(0,0,BASE_W,BASE_H);
+    ctx.fillStyle=rg; ctx.fillRect(0,0,WORLD_W,WORLD_H);
   }
 
   ctx.save();
@@ -84,8 +83,6 @@ function drawBackground(dt){
     ctx.font='700 18px Segoe UI';
     ctx.fillText(game.mapName, A.x+14, A.y-14);
   }
-
-  ctx.restore();
 }
 
 function drawPlayer(){
@@ -203,6 +200,9 @@ function drawPlayer(){
     ctx.fillStyle=p.color; ctx.beginPath(); ctx.moveTo(playerRadius(p)+14,0); ctx.lineTo(playerRadius(p)+9,-4); ctx.lineTo(playerRadius(p)+9,4); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
+}
+
+function drawCrosshair(){
   ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1.5;
   ctx.beginPath(); ctx.arc(mouse.x,mouse.y,6,0,Math.PI*2); ctx.fill(); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(mouse.x-10,mouse.y); ctx.lineTo(mouse.x-3,mouse.y); ctx.moveTo(mouse.x+3,mouse.y); ctx.lineTo(mouse.x+10,mouse.y); ctx.moveTo(mouse.x,mouse.y-10); ctx.lineTo(mouse.x,mouse.y-3); ctx.moveTo(mouse.x,mouse.y+3); ctx.lineTo(mouse.x,mouse.y+10); ctx.stroke();

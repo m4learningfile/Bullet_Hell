@@ -11,11 +11,14 @@ function spawnEnemy(type, opts={}){
   let x,y;
   if(opts.x!==undefined&&opts.y!==undefined){ x=opts.x; y=opts.y; }
   else {
+    // V5: spawn just outside the camera viewport so enemies approach from edge-of-view
+    // regardless of where the player is in the larger world.
     const side=(opts.side!==undefined)?opts.side:Math.floor(Math.random()*4), margin=60;
-    if(side===0){x=rand(A.x,A.x+A.w);y=A.y-margin;}
-    else if(side===1){x=rand(A.x,A.x+A.w);y=A.y+A.h+margin;}
-    else if(side===2){x=A.x-margin;y=rand(A.y,A.y+A.h);}
-    else{x=A.x+A.w+margin;y=rand(A.y,A.y+A.h);}
+    const vL=camera.x, vR=camera.x+BASE_W, vT=camera.y, vB=camera.y+BASE_H;
+    if(side===0){x=rand(vL,vR);y=vT-margin;}
+    else if(side===1){x=rand(vL,vR);y=vB+margin;}
+    else if(side===2){x=vL-margin;y=rand(vT,vB);}
+    else{x=vR+margin;y=rand(vT,vB);}
   }
   const bossScale=opts.boss?getBossScale():{hp:1,speed:1};
   const runScale=getEnemyRunScale();
@@ -112,7 +115,7 @@ function updateEnemies(dt){
         if(e.type==='skull' && !e._spawnedDeathWave){
           e._spawnedDeathWave=true;
           if(!game.enemyDeathRings) game.enemyDeathRings=[];
-          game.enemyDeathRings.push({x:e.x,y:e.y,r:10,maxR:Math.max(BASE_W,BASE_H),speed:900,dmg:5,hitPlayer:false});
+          game.enemyDeathRings.push({x:e.x,y:e.y,r:10,maxR:Math.max(WORLD_W,WORLD_H),speed:900,dmg:5,hitPlayer:false});
         }
         const role=e.sharedBossRole||0;
         if(!e.sharedBossPool || e.type==='skull'){ trackBossKill(e.type); game.stats.bossesKilled++; }

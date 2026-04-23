@@ -20,10 +20,10 @@ function currentSkillDamageBonus(cls){
 }
 function arenaRect(){
   const s=game.arenaScale;
-  const w=BASE_W*0.85*s, h=BASE_H*0.78*s;
-  const maxW=BASE_W*0.95, maxH=BASE_H*0.90;
+  const w=WORLD_W*0.85*s, h=WORLD_H*0.78*s;
+  const maxW=WORLD_W*0.95, maxH=WORLD_H*0.90;
   const aw=Math.min(w,maxW), ah=Math.min(h,maxH);
-  return{ x:(BASE_W-aw)/2, y:(BASE_H-ah)/2, w:aw, h:ah };
+  return{ x:(WORLD_W-aw)/2, y:(WORLD_H-ah)/2, w:aw, h:ah };
 }
 
 function getTrapezoidGuidePoints(e){

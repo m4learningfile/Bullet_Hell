@@ -3,6 +3,7 @@
 // CONSTANTS
 // ============================================================
 const BASE_W = 1280, BASE_H = 800;
+const WORLD_W = BASE_W * 2.5, WORLD_H = BASE_H * 2.5;
 const PLAYER_SPEED = 260;
 const PLAYER_RADIUS = 14;
 const PLAYER_FIRE_RATE = 6;

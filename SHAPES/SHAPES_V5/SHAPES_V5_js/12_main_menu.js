@@ -24,21 +24,23 @@ function frame(now){
     if(game.flash>0) game.flash-=dt;
   }
 
+  updateCamera();
+
   // Clear
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // Shake offset
+  // Shake offset + BASE→canvas scale baked in
   const sx=(Math.random()-0.5)*game.shake;
   const sy=(Math.random()-0.5)*game.shake;
   const scale=screenScale();
-  ctx.setTransform(1,0,0,1,sx*scale,sy*scale);
+  ctx.setTransform(scale,0,0,scale,sx*scale,sy*scale);
+
+  // World pass
+  ctx.save();
+  ctx.translate(-camera.x, -camera.y);
 
   drawBackground(dt);
-
-  // Scale to game coordinates
-  ctx.save();
-  ctx.scale(scale,scale);
 
   for(const e of game.enemies) drawEnemy(e);
   drawHexTriangles();
@@ -50,16 +52,19 @@ function frame(now){
 
   if(game.timeFreezeT>0){
     ctx.fillStyle='rgba(255,140,42,0.12)';
-    ctx.fillRect(0,0,BASE_W,BASE_H);
+    ctx.fillRect(0,0,WORLD_W,WORLD_H);
   }
   if(game.flash>0){
     ctx.fillStyle='rgba(255,80,80,'+(game.flash*0.5)+')';
-    ctx.fillRect(0,0,BASE_W,BASE_H);
+    ctx.fillRect(0,0,WORLD_W,WORLD_H);
   }
 
-  drawHUD();
-
   ctx.restore();
+
+  // Screen-space HUD + crosshair
+  drawHUD();
+  drawCrosshair();
+
   requestAnimationFrame(frame);
 }
 
@@ -517,6 +522,78 @@ function renderCompendium(tab){
       } else {
         body.innerHTML='<h4>??? 🔒</h4><div class="meta">Unknown threat</div><p><b>Unlock:</b> Defeat this boss at least once.</p>';
       }
+      entry.appendChild(shape); entry.appendChild(body);
+      container.appendChild(entry);
+    }
+  } else if(tab==='boons'){
+    const STAT_BOON_ORDER = ['damage','hp','skillDamage','skillCooldown','blockCooldown','moveSpeed'];
+    const BOON_COMP_DESC = {
+      damage:        r => '+'+r.value+' bullet damage.',
+      hp:            r => '+'+r.value+' max health. (Class variants: Star is fixed 1 HP; Hexagon also buffs triangle allies by +'+(r.value*2)+' HP.)',
+      skillDamage:   r => '+'+(r.value*3)+' damage to damaging abilities. Scales differently per class — Circle ×3, Skull ×5, Pink gains dash range, Purple gains burst duration, Trapezoid none.',
+      skillCooldown: r => 'Adds '+r.value+' stack'+(r.value>1?'s':'')+' of 10% ability cooldown reduction (diminishing). Blue instead grows Big Ball size; Kite lengthens ghost trail.',
+      blockCooldown: r => 'Adds '+r.value+' stack'+(r.value>1?'s':'')+' of 10% block cooldown reduction (diminishing).',
+      moveSpeed:     r => '+'+(10*r.value)+'% movement speed.',
+      shots:         r => '+1 extra projectile stream (max 4). Hexagon gains +1 triangle ally instead.',
+    };
+    const sectionHeader = txt => {
+      const h=document.createElement('div');
+      h.style.cssText='font-size:13px;letter-spacing:2px;color:#9cf;margin:10px 0 4px;padding-top:6px;border-top:1px solid #2a2e3c;';
+      h.textContent=txt; return h;
+    };
+    const renderBoonEntry = (key, tiers) => {
+      const def=BOON_DEFS[key];
+      const entry=document.createElement('div');
+      entry.className='comp-entry';
+      const shape=document.createElement('div'); shape.className='shape';
+      const n = tiers.length;
+      const swatches = tiers.map((tier,i)=>{
+        let cx, r;
+        if(n===1){ cx=24; r=14; }
+        else if(n===3){ cx=12+i*12; r=8; }
+        else { cx=8+i*11; r=5.5; }
+        return '<circle cx="'+cx+'" cy="24" r="'+r+'" fill="'+RARITY_DEFS[tier].color+'" stroke="#000" stroke-width="1"/>';
+      }).join('');
+      shape.innerHTML='<svg width="48" height="48" viewBox="0 0 48 48">'+swatches+'</svg>';
+      const body=document.createElement('div'); body.className='comp-entry-body';
+      let html='<h4>'+def.title.toUpperCase()+'</h4>';
+      for(const tier of tiers){
+        const rd=RARITY_DEFS[tier];
+        html+='<p><b style="color:'+rd.color+'">'+rd.label+':</b> '+BOON_COMP_DESC[key](rd)+'</p>';
+      }
+      body.innerHTML=html;
+      entry.appendChild(shape); entry.appendChild(body);
+      container.appendChild(entry);
+    };
+    container.appendChild(sectionHeader('STAT BOONS'));
+    for(const key of STAT_BOON_ORDER){
+      renderBoonEntry(key, ['common','rare','epic','legendary']);
+    }
+    const emptyNote = () => {
+      const d=document.createElement('div');
+      d.style.cssText='padding:10px 0;opacity:0.5;font-size:12px;font-style:italic;';
+      d.textContent='None yet.';
+      return d;
+    };
+    container.appendChild(sectionHeader('COMMON BOONS'));
+    container.appendChild(emptyNote());
+    container.appendChild(sectionHeader('RARE BOONS'));
+    container.appendChild(emptyNote());
+    container.appendChild(sectionHeader('EPIC BOONS'));
+    renderBoonEntry('shots', ['epic']);
+    container.appendChild(sectionHeader('LEGENDARY BOONS'));
+    const legColor = RARITY_DEFS.legendary.color;
+    for(const key of LEGENDARY_KEYS){
+      if(!UNIQUE_LEGENDARY_KEYS.has(key)) continue;
+      const def=LEGENDARY_DEFS[key];
+      const entry=document.createElement('div');
+      entry.className='comp-entry';
+      const shape=document.createElement('div'); shape.className='shape';
+      shape.innerHTML='<svg width="48" height="48" viewBox="0 0 48 48"><polygon points="24,4 44,24 24,44 4,24" fill="'+legColor+'" stroke="#000" stroke-width="1.5"/></svg>';
+      const body=document.createElement('div'); body.className='comp-entry-body';
+      body.innerHTML='<h4>'+def.title.toUpperCase()+'</h4>'
+        +'<div class="meta"><span style="color:'+legColor+'">LEGENDARY</span></div>'
+        +'<p>'+def.desc+'</p>';
       entry.appendChild(shape); entry.appendChild(body);
       container.appendChild(entry);
     }

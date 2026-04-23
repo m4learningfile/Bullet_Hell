@@ -95,12 +95,13 @@ const BOON_DEFS = {
   moveSpeed:     { title:'Move Speed',     apply(v){ game.upgrades.moveSpeed+=v; }},
 };
 
-const LEGENDARY_KEYS = ['revive','pierce','bounce','borrowAbility','betterBoons','megaStat'];
+const UNIQUE_LEGENDARY_KEYS = new Set(['revive','pierce','bounce','borrowAbility','betterBoons']);
+const LEGENDARY_KEYS = ['revive','pierce','bounce','borrowAbility','betterBoons','hp','damage','skillDamage','skillCooldown','blockCooldown','moveSpeed'];
 const LEGENDARY_DEFS = {
-  revive:       { title:'Phoenix Heart',    desc:'Revive once with full HP when you would die.', apply(){ game.upgrades.revive=(game.upgrades.revive||0)+1; }},
-  pierce:       { title:'Piercing Rounds',  desc:'Bullets pierce through every enemy.', apply(){ game.upgrades.pierce=true; }},
-  bounce:       { title:'Ricochet Rounds',  desc:'Bullets bounce off arena walls once.', apply(){ game.upgrades.bounce=true; }},
-  borrowAbility:{ title:'Borrowed Power',   desc:'Gain a random weakened ability from another class. Fixed at pick time. Activate with T.',
+  revive:        { title:'Phoenix Heart',    desc:'Revive once with full HP when you would die.', apply(){ game.upgrades.revive=(game.upgrades.revive||0)+1; }},
+  pierce:        { title:'Piercing Rounds',  desc:'Bullets pierce through every enemy.', apply(){ game.upgrades.pierce=true; }},
+  bounce:        { title:'Ricochet Rounds',  desc:'Bullets bounce off arena walls once.', apply(){ game.upgrades.bounce=true; }},
+  borrowAbility: { title:'Borrowed Power',   desc:'Gain a random weakened ability from another class. Fixed at pick time. Activate with T.',
     apply(){
       const p=game.player;
       // V2: kite and crescent are too class-dependent to lend out
@@ -110,19 +111,14 @@ const LEGENDARY_DEFS = {
       game.borrowed={ cls, t:0, active:0, charges:1, maxCharges:1 };
     }
   },
-  betterBoons:  { title:'Fortune Favored',  desc:'Better odds on future boon rolls.', apply(){ game.upgrades.betterBoons=true; }},
-  megaStat:     { title:'Apex Stat',        desc:'+4 to a random stat upgrade.', apply(){ applyMegaStat(); }},
+  betterBoons:   { title:'Fortune Favored',  desc:'Better odds on future boon rolls.', apply(){ game.upgrades.betterBoons=true; }},
+  hp:            { title:'Apex Health',         apply(){ BOON_DEFS.hp.apply(4); }},
+  damage:        { title:'Apex Bullet Damage',  apply(){ BOON_DEFS.damage.apply(4); }},
+  skillDamage:   { title:'Apex Skill Damage',   apply(){ BOON_DEFS.skillDamage.apply(4); }},
+  skillCooldown: { title:'Apex Skill Cooldown', apply(){ BOON_DEFS.skillCooldown.apply(4); }},
+  blockCooldown: { title:'Apex Block Cooldown', apply(){ BOON_DEFS.blockCooldown.apply(4); }},
+  moveSpeed:     { title:'Apex Move Speed',     apply(){ BOON_DEFS.moveSpeed.apply(4); }},
 };
-
-function applyMegaStat(){
-  const opts=['hp','damage','skillCooldown','blockCooldown','skillDamage','moveSpeed'];
-  let pool=opts.filter(k=>!(game.player&&game.player.cls==='white'&&k==='hp'));
-  if(game.player&&game.player.cls==='red') pool=pool.filter(k=>k!=='skillDamage');
-  if(game.player&&game.player.cls==='yellow') pool=pool.filter(k=>k!=='damage');
-  const key=pool[Math.floor(Math.random()*pool.length)];
-  BOON_DEFS[key].apply(4);
-  game.boonHistory.push('Apex '+BOON_DEFS[key].title+' (+4)');
-}
 
 function getAvailableBoonKeys(rarity) {
   const cls = game.player ? game.player.cls : null;
@@ -139,14 +135,23 @@ function rollBoonChoices(){
   while(choices.length<3){
     const rarity=pickRarity();
     if(rarity==='legendary'){
-      const owned=game.legendariesOwned.size;
-      const available=LEGENDARY_KEYS.filter(k=>!game.legendariesOwned.has(k)&&!used.has('legendary:'+k));
-      if(owned>=2||!available.length){
-        if(used.has('legendary:_mega'))continue;
-        used.add('legendary:_mega'); choices.push({key:'megaStat',rarity:'legendary',isFallback:true}); continue;
-      }
-      const key=available[Math.floor(Math.random()*available.length)];
-      used.add('legendary:'+key); choices.push({key,rarity:'legendary',isFallback:false}); continue;
+      const cls = game.player ? game.player.cls : null;
+      const uniqueOwned = [...game.legendariesOwned].filter(k=>UNIQUE_LEGENDARY_KEYS.has(k)).length;
+      const pool = LEGENDARY_KEYS.filter(k=>{
+        if(used.has('legendary:'+k)) return false;
+        if(UNIQUE_LEGENDARY_KEYS.has(k)){
+          if(game.legendariesOwned.has(k)) return false;
+          if(uniqueOwned>=2) return false;
+          return true;
+        }
+        if(cls==='white' && k==='hp') return false;
+        if(cls==='red'   && k==='skillDamage') return false;
+        if(cls==='yellow'&& k==='damage') return false;
+        return true;
+      });
+      if(!pool.length) continue;
+      const key=pool[Math.floor(Math.random()*pool.length)];
+      used.add('legendary:'+key); choices.push({key,rarity:'legendary'}); continue;
     }
     let pool=getAvailableBoonKeys(rarity).filter(k=>!used.has(rarity+':'+k));
     if(rarity!=='epic') pool=pool.filter(k=>k!=='shots');
@@ -187,20 +192,20 @@ function openBoonMenu(){
   const sub=document.querySelector('#boonMenu .subtitle');
   if(sub) sub.textContent='Pick an upgrade. Remaining after this: '+Math.max(0,game.pendingBoonPicks-1);
   picks.forEach(pick=>{
-    const{key,rarity,isFallback}=pick;
+    const{key,rarity}=pick;
     const rd=RARITY_DEFS[rarity];
     const card=document.createElement('div');
     card.className='boon-card';
     card.style.borderColor=rd.color;
     card.style.boxShadow='0 0 22px '+rd.color+'55';
     let title,descText;
-    if(rarity==='legendary'){ title=LEGENDARY_DEFS[key].title; descText=LEGENDARY_DEFS[key].desc; }
+    if(rarity==='legendary'){ title=LEGENDARY_DEFS[key].title; descText=LEGENDARY_DEFS[key].desc || boonDesc(key,'legendary'); }
     else { title=BOON_DEFS[key].title; descText=boonDesc(key,rarity); }
     card.innerHTML='<h3>'+title+'</h3><p><b style="color:'+rd.color+'">'+rd.label+'</b> · '+descText+'</p>';
     card.addEventListener('click',()=>{
       if(rarity==='legendary'){
         LEGENDARY_DEFS[key].apply();
-        if(!isFallback) game.legendariesOwned.add(key);
+        if(UNIQUE_LEGENDARY_KEYS.has(key)) game.legendariesOwned.add(key);
         game.totalUpgrades+=4; game.boonHistory.push(title+' (Legendary)');
       } else {
         BOON_DEFS[key].apply(rd.value);

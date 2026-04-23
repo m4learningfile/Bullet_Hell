@@ -3,7 +3,7 @@
 // ============================================================
 function makePlayer(cls){
   const C=CLASSES[cls];
-  return{ x:BASE_W/2, y:BASE_H/2, vx:0, vy:0,
+  return{ x:WORLD_W/2, y:WORLD_H/2, vx:0, vy:0,
     cls, color:C.color,
     radius: cls==='red' ? ENEMY_DEFS.trapezoid.r : PLAYER_RADIUS,
     hp:C.hp, maxHp:C.hp,
@@ -203,7 +203,7 @@ function updatePlayer(dt){
     }
   }
   // V2: auto-aim option targets the nearest enemy instead of the mouse
-  let aimX=mouse.x, aimY=mouse.y;
+  let aimX=mouse.wx, aimY=mouse.wy;
   if(saveData.options&&saveData.options.autoAim){
     let nearest=null, nD2=Infinity;
     for(const e of game.enemies){
@@ -229,7 +229,7 @@ function updatePlayer(dt){
     if(crescentOn){
       const activeCrescents = game.playerBullets.filter(b=>b.crescent&&b.life>0).length;
       if(activeCrescents===0){
-        const aimX=game.aimX!==undefined?game.aimX:mouse.x, aimY=game.aimY!==undefined?game.aimY:mouse.y;
+        const aimX=game.aimX!==undefined?game.aimX:mouse.wx, aimY=game.aimY!==undefined?game.aimY:mouse.wy;
         const dx=aimX-p.x, dy=aimY-p.y, m=Math.max(60,Math.hypot(dx,dy));
         const spd=CLASSES.crescent.crescentSpeed*0.55 + game.upgrades.skillDamage*10;
         const dmg=(PLAYER_BULLET_DMG+game.upgrades.damage)*4;
@@ -302,14 +302,14 @@ function useAbility(){
     Audio.blip(660,0.3,'sawtooth',0.2);
   } else if(p.cls==='green'){
     if(game.ability.charges<=0) return;
-    let dmx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dmy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
+    let dmx=(game.aimX!==undefined?game.aimX:mouse.wx)-p.x,dmy=(game.aimY!==undefined?game.aimY:mouse.wy)-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
     p.dashVx=dmx*1400; p.dashVy=dmy*1400; p.dashT=C.duration;
     p.iframes=Math.max(p.iframes,C.duration+0.08); p.dashHits=new Set();
     game.ability.charges--; if(game.ability.t<=0) game.ability.t=effectiveAbilityCooldown(p.cls);
     Audio.blip(1200,0.1,'square',0.15);
   } else if(p.cls==='blue'){
     if(game.ability.t>0) return;
-    const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
+    const dx=(game.aimX!==undefined?game.aimX:mouse.wx)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.wy)-p.y,m=Math.hypot(dx,dy)||1;
     const radius=C.ballRadius+game.upgrades.blueBallSize*5;
     game.playerBullets.push({ x:p.x+(dx/m)*(playerRadius(p)+4),y:p.y+(dy/m)*(playerRadius(p)+4),vx:(dx/m)*C.ballSpeed,vy:(dy/m)*C.ballSpeed,life:6,bigBall:true,r:radius,dmg:C.ballDmg+currentSkillDamageBonus('blue'),pierced:new WeakSet() });
     game.ability.t=effectiveAbilityCooldown(p.cls);
@@ -321,7 +321,7 @@ function useAbility(){
   } else if(p.cls==='red'){
     if(game.ability.t>0||game.trapWindUp>0) return;
     // Start wind-up
-    const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
+    const dx=(game.aimX!==undefined?game.aimX:mouse.wx)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.wy)-p.y,m=Math.hypot(dx,dy)||1;
     game.trapWindDir={ x:dx/m, y:dy/m }; game.trapWindUp=CLASSES.red.windUp;
     game.ability.t=effectiveAbilityCooldown('red');
     Audio.blip(400,0.18,'sine',0.10);
@@ -331,7 +331,7 @@ function useAbility(){
     summonHexTriangle();
   } else if(p.cls==='pink'){
     if(game.ability.t>0) return;
-    const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
+    const dx=(game.aimX!==undefined?game.aimX:mouse.wx)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.wy)-p.y,m=Math.hypot(dx,dy)||1;
     const baseRange=220, rangeBonus=Math.min(50,game.upgrades.skillDamage*10);
     const maxRange=baseRange+rangeBonus;
     const actualDist=Math.min(m,maxRange);
@@ -385,12 +385,12 @@ function useBorrowedAbility(){
     p.iframes=Math.max(p.iframes,dur); B.t=cd; B.active=dur;
   } else if(bcls==='green'){
     if(B.charges<=0)return; // weakened: 1 charge instead of 2
-    let dmx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dmy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
+    let dmx=(game.aimX!==undefined?game.aimX:mouse.wx)-p.x,dmy=(game.aimY!==undefined?game.aimY:mouse.wy)-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
     p.dashVx=dmx*1400; p.dashVy=dmy*1400; p.dashT=C.duration; p.iframes=Math.max(p.iframes,C.duration+0.08); p.dashHits=new Set();
     B.charges--; if(B.t<=0) B.t=cd;
   } else if(bcls==='blue'){
     if(B.t>0)return; // weakened: 15s cooldown instead of 10s (via BORROWED_COOLDOWNS)
-    const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
+    const dx=(game.aimX!==undefined?game.aimX:mouse.wx)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.wy)-p.y,m=Math.hypot(dx,dy)||1;
     const radius=C.ballRadius+game.upgrades.blueBallSize*5;
     game.playerBullets.push({ x:p.x+(dx/m)*(playerRadius(p)+4),y:p.y+(dy/m)*(playerRadius(p)+4),vx:(dx/m)*C.ballSpeed,vy:(dy/m)*C.ballSpeed,life:6,bigBall:true,r:radius,dmg:C.ballDmg+currentSkillDamageBonus('blue'),pierced:new WeakSet() });
     B.t=cd;
@@ -400,7 +400,7 @@ function useBorrowedAbility(){
     B.t=cd; p.octaFireCdB=0;
   } else if(bcls==='red'){
     if(B.t>0)return; // weakened: 10s cooldown, scales off skill damage
-    let dmx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dmy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
+    let dmx=(game.aimX!==undefined?game.aimX:mouse.wx)-p.x,dmy=(game.aimY!==undefined?game.aimY:mouse.wy)-p.y; const m=Math.hypot(dmx,dmy)||1; dmx/=m;dmy/=m;
     p.dashVx=dmx*1200; p.dashVy=dmy*1200; p.dashT=0.25;
     p.iframes=Math.max(p.iframes,p.dashT+0.08);
     p.dashHits=new Set();
@@ -413,7 +413,7 @@ function useBorrowedAbility(){
     B.t=cd;
   } else if(bcls==='pink'){
     if(B.t>0)return;
-    const dx=(game.aimX!==undefined?game.aimX:mouse.x)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.y)-p.y,m=Math.hypot(dx,dy)||1;
+    const dx=(game.aimX!==undefined?game.aimX:mouse.wx)-p.x,dy=(game.aimY!==undefined?game.aimY:mouse.wy)-p.y,m=Math.hypot(dx,dy)||1;
     const baseRange=200, rangeBonus=Math.min(40,game.upgrades.skillDamage*8);
     const maxRange=baseRange+rangeBonus;
     const actualDist=Math.min(m,maxRange);

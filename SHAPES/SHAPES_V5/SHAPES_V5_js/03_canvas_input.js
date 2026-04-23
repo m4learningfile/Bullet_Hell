@@ -18,7 +18,17 @@ function screenScale(){ return canvas.width/BASE_W; }
 // INPUT
 // ============================================================
 const keys = {};
-const mouse = { x:BASE_W/2, y:BASE_H/2, down:false, right:false };
+const mouse = { x:BASE_W/2, y:BASE_H/2, wx:WORLD_W/2, wy:WORLD_H/2, down:false, right:false };
+const camera = { x:(WORLD_W-BASE_W)/2, y:(WORLD_H-BASE_H)/2 };
+function updateCamera(){
+  if(!game || !game.player){ return; }
+  const maxX = WORLD_W - BASE_W, maxY = WORLD_H - BASE_H;
+  const tx = game.player.x - BASE_W/2, ty = game.player.y - BASE_H/2;
+  camera.x = tx<0?0:tx>maxX?maxX:tx;
+  camera.y = ty<0?0:ty>maxY?maxY:ty;
+  mouse.wx = mouse.x + camera.x;
+  mouse.wy = mouse.y + camera.y;
+}
 let paused = false;
 window.addEventListener('keydown', e => {
   const k=e.key.toLowerCase(); keys[k]=true;
